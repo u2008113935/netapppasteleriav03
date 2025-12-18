@@ -5,10 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:apppasteleriav03.Views"
     Title="Delicia"
-    FlyoutBehavior="Flyout"
-    Shell.TabBarBackgroundColor="{StaticResource PrimaryColor}"
-    Shell.TabBarForegroundColor="White"
-    Shell.TabBarUnselectedColor="#E1BEE7">
+    FlyoutBehavior="Flyout">
 
     <!-- Toolbar - botones de la esquina superior derecha -->
     <Shell.ToolbarItems>
@@ -32,38 +29,27 @@
             </Grid.ColumnDefinitions>
 
             <Image Source="avatar_placeholder.png"
-                   HeightRequest="56" 
-                   WidthRequest="56"
+                   HeightRequest="56" WidthRequest="56"
                    Aspect="AspectFill"
                    Grid.Column="0"
-                   VerticalOptions="Center">
-                <Image.Clip>
-                    <EllipseGeometry Center="28,28" RadiusX="28" RadiusY="28"/>
-                    </Image. Clip>
-            </Image>
+                   VerticalOptions="Center"/>
 
-            <StackLayout Grid.Column="1" 
-                         VerticalOptions="Center" 
-                         Spacing="2"
-                         Margin="12,0,0,0">
-
-                <Label Text="{Binding CurrentProfile.FullName}" 
+                <StackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
+                    <Label Text="{Binding CurrentProfile.FullName}" 
                        TextColor="White" 
-                       FontAttributes="Bold"
-                       FontSize="16"/>
-                <Label Text="{Binding CurrentProfile.Email}"
+                       FontAttributes="Bold"/>
+                    <Label Text="{Binding CurrentProfile.Email}"
                        TextColor="White"
-                       FontSize="12"
-                       Opacity="0.9"/>          
-            </StackLayout>
+                       FontSize="12"/>
+                </StackLayout>
 
-            <ImageButton Grid.Column="2"
-                         Source="icon_edit.png"
-                         BackgroundColor="Transparent"
-                         HeightRequest="32"
-                         WidthRequest="32"
-                         Clicked="OnEditProfileClicked"
-                         VerticalOptions="Center"/>
+                <Button Grid.Column="2"
+                    Text="Editar"
+                    BackgroundColor="Transparent"
+                    TextColor="White"
+                    FontAttributes="Bold"
+                    Clicked="OnEditProfileClicked"/>
+
         </Grid>
     </Shell.FlyoutHeader>
 
@@ -90,35 +76,5 @@
         </Tab>
 
     </TabBar>
-
-    <!-- FLYOUT - Opciones adicionales en el menú lateral -->
-    <FlyoutItem Title="Mi Perfil" 
-                Icon="icon_profile. png"
-                Route="profile">
-        <ShellContent ContentTemplate="{DataTemplate local:ProfilePage}" />
-    </FlyoutItem>
-
-    <FlyoutItem Title="Favoritos" 
-                Icon="icon_favorite.png"
-                Route="favorites">
-        <ShellContent ContentTemplate="{DataTemplate local:FavoritesPage}" />
-    </FlyoutItem>
-
-    <FlyoutItem Title="Configuración" 
-                Icon="icon_settings.png"
-                Route="settings">
-        <ShellContent ContentTemplate="{DataTemplate local:SettingsPage}" />
-    </FlyoutItem>
-
-    <!-- Sección del Flyout para opciones menos frecuentes -->
-    <MenuItem Text="Acerca de" 
-              IconImageSource="icon_info.png"
-              Clicked="OnAboutClicked"/>
-
-    <MenuItem Text="Cerrar sesión" 
-              IconImageSource="icon_logout.png"
-              Clicked="OnLogoutClicked"/>
-
-
 
 </Shell>
