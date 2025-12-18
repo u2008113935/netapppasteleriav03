@@ -1,0 +1,93 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:conv="clr-namespace:apppasteleriav03.Converters"
+             x:Class="apppasteleriav03.Views.MainPage"
+             Title="Catálogo - Pastelería Delicia"
+             BackgroundColor="{StaticResource PageBackgroundColor}">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <conv:ImagePathToUriConverter x:Key="ImagePathToUriConverter"/>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ContentPage.Content>
+        <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="12" RowSpacing="8">
+
+            <!-- Header: fila 0 -->
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" VerticalOptions="Start">
+                <StackLayout Orientation="Vertical" Spacing="2" Padding="0">
+                    <Label Text="Pastelería Delicia" FontAttributes="Bold" FontSize="22" TextColor="{StaticResource PrimaryTextColor}" />
+                    <Label Text="Catálogo" FontSize="14" TextColor="{StaticResource SecondaryTextColor}" />
+                </StackLayout>
+
+                <Button Text="Carrito"
+                        Clicked="OnCartClicked"
+                        Grid.Column="1"
+                        VerticalOptions="Center"
+                        BackgroundColor="{StaticResource PrimaryColor}"
+                        TextColor="White"
+                        CornerRadius="10"/>
+            </Grid>
+
+            <!-- Search: fila 1 (ahora en su propia fila, sin margin hack) -->
+            <!-- Search + indicador de carga -->
+            <VerticalStackLayout Grid.Row="1" Spacing="6">
+                <Entry x:Name="SearchEntry"
+                        Placeholder="Buscar producto..."
+                        TextChanged="OnSearchTextChanged" />
+                <ActivityIndicator x:Name="LoadingIndicator"
+                       IsRunning="False"
+                       IsVisible="False"
+                       HeightRequest="36" />
+            </VerticalStackLayout>
+
+            <!-- CollectionView: fila 2 (ocupa el espacio restante y es scrollable) -->
+            <CollectionView x:Name="ProductsCollection"
+                            Grid.Row="2"
+                            SelectionMode="Single"
+                            ItemsLayout="VerticalList"
+                            VerticalOptions="FillAndExpand"
+                            RemainingItemsThreshold="2">
+                <CollectionView.EmptyView>
+                    <Label Text="No se encontraron productos" HorizontalOptions="Center" VerticalOptions="Center" TextColor="{StaticResource SecondaryTextColor}" />
+                </CollectionView.EmptyView>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame Padding="8" Margin="0,6" CornerRadius="8" HasShadow="True" BackgroundColor="{StaticResource CardBackgroundColor}">
+                            <Grid ColumnDefinitions="80,*,Auto" VerticalOptions="Center">
+                                <Image Grid.Column="0"
+                                       Source="{Binding ImagenPath, Converter={StaticResource ImagePathToUriConverter}}"
+                                       WidthRequest="72"
+                                       HeightRequest="72"
+                                       Aspect="AspectFill"/>
+                                <VerticalStackLayout Grid.Column="1" HorizontalOptions="StartAndExpand" Padding="8,0">
+                                    <Label Text="{Binding Nombre}" FontAttributes="Bold" TextColor="{StaticResource PrimaryTextColor}"/>
+                                    <Label Text="{Binding Descripcion}" LineBreakMode="TailTruncation" FontSize="12" TextColor="{StaticResource SecondaryTextColor}" />
+                                    <Label Text="{Binding Precio, StringFormat='₡{0:N2}'}" FontAttributes="Bold" TextColor="{StaticResource PrimaryTextColor}"/>
+                                </VerticalStackLayout>
+
+                                <Button Grid.Column="2"
+                                        Text="Agregar"
+                                        Clicked="OnAddToCartClicked"
+                                        CommandParameter="{Binding .}"
+                                        BackgroundColor="{StaticResource PrimaryColor}"
+                                        TextColor="White"
+                                        CornerRadius="8"
+                                        VerticalOptions="Center"/>
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <!-- Footer: fila 3 -->
+            <StackLayout Grid.Row="3" Orientation="Horizontal" HorizontalOptions="Fill" Spacing="8">
+                <Label x:Name="CartSummaryLabel" Text="Items: 0" VerticalOptions="Center" TextColor="{StaticResource PrimaryTextColor}" />
+                <Button Text="Ver carrito" Clicked="OnCartClicked" BackgroundColor="{StaticResource SecondaryColor}" TextColor="White" CornerRadius="8" HorizontalOptions="EndAndExpand"/>
+            </StackLayout>
+        </Grid>
+    </ContentPage.Content>
+</ContentPage>

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  ProfilePage.xaml
+  Página para ver y editar el perfil del usuario (nombre y avatar).
+  Diseño sencillo y didáctico: imagen de avatar, campos editables y botones Guardar/Cancelar.
+-->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="apppasteleriav03.Views.ProfilePage"
+             Title="Mi perfil">
+
+    <ContentPage.Content>
+        <ScrollView>
+            <VerticalStackLayout Padding="16" Spacing="12">
+
+                <!-- Avatar -->
+                <Frame Padding="8" CornerRadius="80" HeightRequest="160" WidthRequest="160" HorizontalOptions="Center">
+                    <!-- La Source se asigna desde el code-behind (AvatarPublicUrl o una imagen por defecto) -->
+                    <Image x:Name="AvatarImage" Aspect="AspectFill" HeightRequest="144" WidthRequest="144" />
+                </Frame>
+
+                <!-- Campo para la ruta / nombre del archivo del avatar (ej: avatars/user1.jpg).
+             En este ejemplo se permite pegar la ruta; la App construye la URL pública usando SupabaseConfig. -->
+                <Label Text="Avatar (path en storage)" FontAttributes="Bold" />
+                <Entry x:Name="AvatarPathEntry" Placeholder="avatars/usuario1.jpg" IsEnabled="False" />
+
+                <!-- Nombre completo editable -->
+                <Label Text="Nombre completo" FontAttributes="Bold" />
+                <Entry x:Name="FullNameEntry" Placeholder="Nombre y apellidos" IsEnabled="False" />
+
+                <!-- ID de usuario (readonly) -->
+                <Label Text="User ID (UUID)" FontAttributes="Bold" />
+                <Entry x:Name="UserIdEntry" IsEnabled="False" />
+
+                <!-- Botones de acciones -->
+                <HorizontalStackLayout Spacing="10" HorizontalOptions="Center">
+                    <Button x:Name="EditButton" Text="Editar" Clicked="OnEditClicked" />
+                    <Button x:Name="SaveButton" Text="Guardar" Clicked="OnSaveClicked" IsEnabled="False" />
+                    <Button x:Name="CancelButton" Text="Cancelar" Clicked="OnCancelClicked" IsEnabled="False" />
+                </HorizontalStackLayout>
+
+                <!-- Mensajes/ayuda -->
+                <Label x:Name="InfoLabel" TextColor="Gray" FontSize="12" HorizontalOptions="Center" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </ContentPage.Content>
+</ContentPage>

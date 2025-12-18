@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="apppasteleriav03.Views.RegisterPage"
+             Title="Crear cuenta">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="12">
+            <Label Text="Crear cuenta" FontSize="24" FontAttributes="Bold" HorizontalOptions="Center" />
+            <Entry x:Name="NameEntry" Placeholder="Nombre y apellido" />
+            <Entry x:Name="EmailEntry" Placeholder="Correo electrónico" Keyboard="Email" />
+            <Entry x:Name="PhoneEntry" Placeholder="Teléfono (opcional)" Keyboard="Telephone" />
+            <Entry x:Name="PasswordEntry" Placeholder="Contraseña" IsPassword="True" />
+            <Button Text="Registrar" Clicked="OnRegisterClicked" BackgroundColor="#6C5CE7" TextColor="White" />
+            <HorizontalStackLayout HorizontalOptions="Center" Spacing="8">
+                <Label Text="¿Ya tienes cuenta?" VerticalOptions="Center" />
+                <Button Text="Ingresar" Clicked="OnLoginClicked" />
+            </HorizontalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

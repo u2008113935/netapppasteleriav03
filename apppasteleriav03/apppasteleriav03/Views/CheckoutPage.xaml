@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="apppasteleriav03.Views.CheckoutPage"
+             Title="Checkout">
+
+    <ContentPage.Resources>
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#6C63FF"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12,10"/>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="#E0E0E0"/>
+            <Setter Property="TextColor" Value="#222"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12,10"/>
+        </Style>
+    </ContentPage.Resources>
+
+    <ContentPage.Content>
+        <!-- Grid correctamente cerrado -->
+        <Grid RowDefinitions="Auto,*,Auto" Padding="12">
+            <ScrollView Grid.Row="1">
+                <VerticalStackLayout Spacing="12">
+
+                    <Label Text="Confirmar pedido" FontSize="22" FontAttributes="Bold" />
+
+                    <Label x:Name="EmptyCartLabel"
+                           Text="Tu carrito está vacío"
+                           IsVisible="False"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center"
+                           FontAttributes="Italic" />
+
+                    <CollectionView x:Name="CartCollection"
+                                    SelectionMode="None"
+                                    HeightRequest="260"
+                                    ItemsLayout="VerticalList">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Frame Padding="10" Margin="0,6" CornerRadius="10" HasShadow="True">
+                                    <Grid ColumnDefinitions="80,*,Auto" RowDefinitions="Auto,Auto">
+                                        <Frame CornerRadius="8"
+                                               HasShadow="False"
+                                               BackgroundColor="#F6F6F6"
+                                               HeightRequest="72"
+                                               WidthRequest="72"
+                                               HorizontalOptions="Start"
+                                               VerticalOptions="Center">
+                                            <Image Source="{Binding ProductImageUrl, TargetNullValue='placeholder.png'}"
+                                                   WidthRequest="72"
+                                                   HeightRequest="72"
+                                                   Aspect="AspectFill"/>
+                                        </Frame>
+
+                                        <VerticalStackLayout Grid.Column="1" Spacing="4" Padding="8,0">
+                                            <Label Text="{Binding ProductName}" FontAttributes="Bold" LineBreakMode="TailTruncation" MaxLines="2"/>
+                                            <Label Text="{Binding Quantity, StringFormat='Cantidad: {0}'}" FontSize="12" TextColor="#555"/>
+                                            <Label Text="{Binding Price, StringFormat='Precio: {0:C2}'}" FontSize="12" TextColor="#555"/>
+                                        </VerticalStackLayout>
+
+                                        <Label Grid.Column="2" Text="{Binding Subtotal, StringFormat='{0:C2}'}" VerticalOptions="Center" FontAttributes="Bold" HorizontalOptions="End"/>
+                                    </Grid>
+                                </Frame>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+
+                    <Label Text="Dirección de entrega" FontAttributes="Bold" />
+                    <Editor x:Name="AddressEditor" AutoSize="TextChanges" Placeholder="Calle, número, referencia..." HeightRequest="80"/>
+
+                    <HorizontalStackLayout VerticalOptions="Center" Spacing="8">
+                        <Label Text="Entrega a domicilio" VerticalOptions="Center"/>
+                        <Switch x:Name="DeliverySwitch" IsToggled="True" Toggled="OnDeliveryToggled"/>
+                    </HorizontalStackLayout>
+
+                    <Label Text="Método de pago" FontAttributes="Bold" />
+                    <Picker x:Name="PaymentPicker" Title="Seleccionar método" SelectedIndexChanged="OnPaymentMethodChanged">
+                        <Picker.Items>
+                            <x:String>Efectivo al recibir</x:String>
+                            <x:String>Tarjeta (POS)</x:String>
+                            <x:String>Tarjeta (online)</x:String>
+                        </Picker.Items>
+                    </Picker>
+
+                    <VerticalStackLayout x:Name="CardDetailsStack" IsVisible="False" Spacing="8">
+                        <Label Text="Datos de tarjeta" FontAttributes="Bold"/>
+                        <Entry x:Name="CardHolderEntry" Placeholder="Nombre en la tarjeta" Keyboard="Text"/>
+                        <Entry x:Name="CardNumberEntry" Placeholder="Número de tarjeta" Keyboard="Numeric"/>
+                        <HorizontalStackLayout Spacing="8">
+                            <Entry x:Name="CardExpiryEntry" Placeholder="MM/AA" WidthRequest="120"/>
+                            <Entry x:Name="CardCvvEntry" Placeholder="CVV" WidthRequest="100" IsPassword="True" Keyboard="Numeric"/>
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+
+                    <Label Text="Instrucciones / comentarios" FontAttributes="Bold"/>
+                    <Editor x:Name="NotesEditor" AutoSize="TextChanges" HeightRequest="60" Placeholder="Ej.: Sin azúcar, llamar antes de entregar..."/>
+
+                    <Frame Padding="8" CornerRadius="8" HasShadow="True">
+                        <VerticalStackLayout>
+                            <HorizontalStackLayout>
+                                <Label Text="Subtotal:" />
+                                <Label x:Name="SubtotalLabel" HorizontalOptions="EndAndExpand" Text="S/ 0.00"/>
+                            </HorizontalStackLayout>
+                            <HorizontalStackLayout>
+                                <Label Text="Envío:" />
+                                <Label x:Name="ShippingLabel" HorizontalOptions="EndAndExpand" Text="S/ 0.00"/>
+                            </HorizontalStackLayout>
+                            <HorizontalStackLayout>
+                                <Label Text="Total:" FontAttributes="Bold"/>
+                                <Label x:Name="TotalLabel" HorizontalOptions="EndAndExpand" Text="S/ 0.00" FontAttributes="Bold"/>
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+                    </Frame>
+
+                    <!-- Un único botón PlaceOrderButton (asegúrate que CheckoutPage.xaml.cs usa este nombre) -->
+                    <HorizontalStackLayout Spacing="12">
+                        <Button Text="Volver" Clicked="OnBackClicked" HorizontalOptions="StartAndExpand"/>
+                        <Button x:Name="PlaceOrderButton" Text="Pagar y confirmar" BackgroundColor="#2E7D32" TextColor="White" Clicked="OnPlaceOrderClicked" HorizontalOptions="EndAndExpand"/>
+                    </HorizontalStackLayout>
+
+                    <ActivityIndicator x:Name="CheckoutActivity" IsVisible="False" IsRunning="False" HeightRequest="36" />
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- Footer fijo -->
+            <Grid Grid.Row="2" Padding="8" ColumnDefinitions="*,Auto" RowDefinitions="Auto" BackgroundColor="#FFFFFF">
+                <Button Text="Volver" Style="{StaticResource SecondaryButton}" Clicked="OnBackClicked" HorizontalOptions="Start"/>
+                <Button x:Name="PlaceOrderButtonFooter" Text="Pagar y confirmar" Style="{StaticResource PrimaryButton}" Clicked="OnPlaceOrderClicked" HorizontalOptions="End"/>
+            </Grid>
+        </Grid>
+    </ContentPage.Content>
+</ContentPage>

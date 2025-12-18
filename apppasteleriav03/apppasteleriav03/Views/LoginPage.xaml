@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="apppasteleriav03.Views.LoginPage"
+             Title="Iniciar sesión">
+
+    <ContentPage.Content>
+        <ScrollView>
+            <VerticalStackLayout Padding="24" Spacing="16">
+                <Label Text="Iniciar sesión" FontSize="24" FontAttributes="Bold" HorizontalOptions="Center" />
+                <Entry x:Name="EmailEntry" Placeholder="Correo electrónico" Keyboard="Email" />
+                <Entry x:Name="PasswordEntry" Placeholder="Contraseña" IsPassword="True" />
+                <Button Text="Ingresar" Clicked="OnLoginClicked" BackgroundColor="#6C5CE7" TextColor="White" />
+                <HorizontalStackLayout HorizontalOptions="Center" Spacing="8">
+                    <Label Text="¿No tienes cuenta?" VerticalOptions="Center" />
+                    <Button Text="Crear cuenta" Clicked="OnRegisterClicked" />
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+    </ContentPage.Content>
+</ContentPage>
