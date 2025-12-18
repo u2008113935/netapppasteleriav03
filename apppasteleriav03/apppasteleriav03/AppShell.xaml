@@ -4,7 +4,23 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:apppasteleriav03.Views"
-    Title="Delicia">
+    Title="Delicia"
+    FlyoutBehavior="Flyout"
+    Shell.TabBarBackgroundColor="{StaticResource PrimaryColor}"
+    Shell.TabBarForegroundColor="White"
+    Shell.TabBarUnselectedColor="#E1BEE7">
+
+    <!-- Toolbar - botones de la esquina superior derecha -->
+    <Shell.ToolbarItems>
+        <ToolbarItem IconImageSource="icon_profile.png" 
+                     Order ="Primary"
+                     Priority="0"
+                     Clicked="OnEditProfileClicked"/>
+        <ToolbarItem Text="Login" 
+                     Order ="Primary"
+                     Priority="1"
+                     Clicked="OnLoginClicked"/>
+    </Shell.ToolbarItems>
 
     <!-- FlyouHeader con avatar, nombre y boton para editar el perfil -->
     <Shell.FlyoutHeader>
@@ -16,67 +32,93 @@
             </Grid.ColumnDefinitions>
 
             <Image Source="avatar_placeholder.png"
-                   HeightRequest="56" WidthRequest="56"
+                   HeightRequest="56" 
+                   WidthRequest="56"
                    Aspect="AspectFill"
                    Grid.Column="0"
-                   VerticalOptions="Center"/>
+                   VerticalOptions="Center">
+                <Image.Clip>
+                    <EllipseGeometry Center="28,28" RadiusX="28" RadiusY="28"/>
+                    </Image. Clip>
+            </Image>
 
-            <StackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
+            <StackLayout Grid.Column="1" 
+                         VerticalOptions="Center" 
+                         Spacing="2"
+                         Margin="12,0,0,0">
 
                 <Label Text="{Binding CurrentProfile.FullName}" 
                        TextColor="White" 
-                       FontAttributes="Bold"/>
+                       FontAttributes="Bold"
+                       FontSize="16"/>
                 <Label Text="{Binding CurrentProfile.Email}"
                        TextColor="White"
-                       FontSize="12"/>
-                <Button Grid.Column="2"
-                        Text="Editar Perfil"
-                        BackgroundColor="Transparent"
-                        TextColor="White"
-                        FontAttributes="Bold"
-                        Clicked="OnEditProfileClicked"/>
-
+                       FontSize="12"
+                       Opacity="0.9"/>          
             </StackLayout>
 
-
+            <ImageButton Grid.Column="2"
+                         Source="icon_edit.png"
+                         BackgroundColor="Transparent"
+                         HeightRequest="32"
+                         WidthRequest="32"
+                         Clicked="OnEditProfileClicked"
+                         VerticalOptions="Center"/>
         </Grid>
     </Shell.FlyoutHeader>
-    
-    
-    <!-- TabBar Barra inferior con pestañas -->
 
+
+    <!-- TABBAR - Pestañas principales en la parte inferior -->
     <TabBar>
-        <ShellContent Title="Catálogo"
-                      Route="catalog"
-                      ContentTemplate="{DataTemplate local:MainPage}">
-            <ShellContent.Icon>
-            <FontImageSource FontFamily="MaterialIcons" 
-                                     Glyph="home" 
-                                     Color="{StaticResource PrimaryColor}"/>
-            </ShellContent.Icon>
-        </ShellContent>
 
+        <!-- Pestaña Catálogo -->
+        <Tab Title="Catálogo" Icon="icon_home.png">
+            <ShellContent Route="catalog" 
+                          ContentTemplate="{DataTemplate local:MainPage}" />
+        </Tab>
 
-        <ShellContent Title="Carrito"                      
-                      Route="cart"
-                      ContentTemplate="{DataTemplate local:CartPage}">
-            <ShellContent.Icon>
-                <FontImageSource FontFamily="MaterialIcons" 
-                          Glyph="shopping_cart" 
-                          Color="{StaticResource PrimaryColor}"/>
-            </ShellContent.Icon>
-        </ShellContent>
-        <ShellContent Title="Pedidos"                    
-                      Route="orders"
-                      ContentTemplate="{DataTemplate local:OrdersPage}">
-            <ShellContent.Icon>
-                <FontImageSource FontFamily="MaterialIcons" 
-                          Glyph="receipt_long" 
-                          Color="{StaticResource PrimaryColor}"/>
-            </ShellContent.Icon>
-        </ShellContent>
+        <!-- Pestaña Carrito -->
+        <Tab Title="Carrito" Icon="icon_cart.png">
+            <ShellContent Route="cart" 
+                          ContentTemplate="{DataTemplate local:CartPage}" />
+        </Tab>
+
+        <!-- Pestaña Pedidos -->
+        <Tab Title="Pedidos" Icon="icon_orders.png">
+            <ShellContent Route="orders" 
+                          ContentTemplate="{DataTemplate local:OrdersPage}" />
+        </Tab>
+
     </TabBar>
 
-  
+    <!-- FLYOUT - Opciones adicionales en el menú lateral -->
+    <FlyoutItem Title="Mi Perfil" 
+                Icon="icon_profile. png"
+                Route="profile">
+        <ShellContent ContentTemplate="{DataTemplate local:ProfilePage}" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Favoritos" 
+                Icon="icon_favorite.png"
+                Route="favorites">
+        <ShellContent ContentTemplate="{DataTemplate local:FavoritesPage}" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Configuración" 
+                Icon="icon_settings.png"
+                Route="settings">
+        <ShellContent ContentTemplate="{DataTemplate local:SettingsPage}" />
+    </FlyoutItem>
+
+    <!-- Sección del Flyout para opciones menos frecuentes -->
+    <MenuItem Text="Acerca de" 
+              IconImageSource="icon_info.png"
+              Clicked="OnAboutClicked"/>
+
+    <MenuItem Text="Cerrar sesión" 
+              IconImageSource="icon_logout.png"
+              Clicked="OnLogoutClicked"/>
+
+
 
 </Shell>
