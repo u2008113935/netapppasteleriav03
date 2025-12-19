@@ -5,6 +5,13 @@ using System.Diagnostics;
 
 namespace apppasteleriav03.Services
 {
+    // Modelo simple de usuario autenticado
+    public class AuthUser
+    {
+        public string? Id { get; set; }
+        public string? Email { get; set; }
+    }
+    
     // Servicio de autenticación por llamadas reales a Supabase REST.
     public class AuthService
     {
@@ -52,8 +59,9 @@ namespace apppasteleriav03.Services
                     return false;
                 }
 
-                AccessToken = res.AccessToken;
-                UserId = res.UserId?.ToString();
+                AccessToken = res.AccessToken;  // Guardar AccessToken en memoria
+                UserId = res.UserId?.ToString(); // Guardar UserId como string
+                UserEmail = email.Trim(); // Guardar email en memoria
 
 
                 try
@@ -99,7 +107,6 @@ namespace apppasteleriav03.Services
 
                 if(!string.IsNullOrWhiteSpace(AccessToken))
                     SupabaseService.Instance.SetUserToken(AccessToken);
-
             }
             catch
             {
@@ -117,12 +124,29 @@ namespace apppasteleriav03.Services
             return true;
         }
 
-        public async Task SignOutAsync()
+        public void Logout()
         {
             AccessToken = null;
             UserId = null;
-            SecureStorage.Default.Remove(TokenKey);
-            SecureStorage.Default.Remove(UserIdKey);
+            UserEmail = null;
+
+            try
+            {
+                SecureStorage.Default.Remove(TokenKey);
+                SecureStorage.Default.Remove(UserIdKey);
+                SecureStorage.Default.Remove(RefreshKey);
+            }
+            catch
+            {
+                //ignorar errores de SecureStorage
+            }
+            // Informar a SupabaseService que no hay token
+            SupabaseService.Instance.SetUserToken(null);
+        }
+
+        public async Task SignOutAsync()
+        {
+            Logout();
             await Task.CompletedTask;
         }
 
@@ -136,8 +160,7 @@ namespace apppasteleriav03.Services
             //Si no, intentar cargarlo del SecureStorage
             try
             {
-                //TokenKey debe ser el mismo que usamos en SignInAsync
-                
+                //TokenKey debe ser el mismo que usamos en SignInAsync                
                 var tokenFromStorage = await SecureStorage.Default.GetAsync(TokenKey);
                 return tokenFromStorage;
             }

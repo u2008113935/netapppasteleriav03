@@ -161,8 +161,8 @@ namespace apppasteleriav03
                         else
                             fallback.Email = "usuario@ejemplo.com";
 
-                            // fallback
-                            CurrentProfile = fallback
+                        // fallback
+                        CurrentProfile = fallback;
 
                     }
                 }

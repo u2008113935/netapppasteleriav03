@@ -18,10 +18,13 @@ namespace apppasteleriav03.Services
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
+        public event EventHandler? CartChanged;        
+
         // Total del carrito (suma precio * cantidad)
         public decimal Total => Items.Sum(i => i.Price * i.Quantity);
 
         public int Count => Items.Sum(i => i.Quantity);
+        public int GetItemCount() => Count;
 
         // Key para almacenamiento local
         const string CartStorageKey = "local_cart_v1";
@@ -62,6 +65,9 @@ namespace apppasteleriav03.Services
             OnPropertyChanged(nameof(Items));
             OnPropertyChanged(nameof(Count));
             OnPropertyChanged(nameof(Total));
+
+
+            CartChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void CartItem_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -71,6 +77,9 @@ namespace apppasteleriav03.Services
             {
                 OnPropertyChanged(nameof(Count));
                 OnPropertyChanged(nameof(Total));
+
+
+                CartChanged?.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -217,6 +226,9 @@ namespace apppasteleriav03.Services
 
             // Opcional: guardar después de merge
             _ = SaveLocalAsync();
+
+            // Notificar cambio de carrito
+            CartChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 }

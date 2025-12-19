@@ -47,6 +47,15 @@ namespace apppasteleriav03.Services
             }
         }
 
+        public AuthUser GetCurrentUser()
+        {
+            return new AuthUser
+            {
+                Id = AuthService.Instance.UserId,
+                Email = AuthService.Instance.UserEmail
+            };
+        }
+
         public async Task<List<Product>> GetProductsAsync()
         {
             try
