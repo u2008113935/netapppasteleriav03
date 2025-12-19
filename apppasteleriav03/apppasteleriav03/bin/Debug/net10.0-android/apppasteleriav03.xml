@@ -16,6 +16,11 @@
             Usa string para Id para evitar problemas con UUID en deserialización.
             </summary>
         </member>
+        <member name="M:apppasteleriav03.Models.Product.Validate">
+            <summary>
+            Valida el producto y devuelve una lista de errores. Lista vacía = válido.
+            </summary>
+        </member>
         <member name="T:apppasteleriav03.Services.ImageHelper">
             <summary>
             Normaliza rutas de imagen provenientes del API.

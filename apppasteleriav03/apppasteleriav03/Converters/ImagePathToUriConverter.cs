@@ -8,7 +8,8 @@ namespace apppasteleriav03.Converters
 {
     public class ImagePathToUriConverter : IValueConverter
     {
-        const string PlaceholderFile = "placeholder_food.png";
+        // Usar la misma constante que en ImageHelper
+        const string PlaceholderFile = ImageHelper.DefaultPlaceholder;
 
         public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
@@ -21,7 +22,10 @@ namespace apppasteleriav03.Converters
                     return ImageSource.FromFile(PlaceholderFile);
 
                 if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-                    return ImageSource.FromFile(PlaceholderFile);
+                {
+                    // tratar como fichero local
+                    return ImageSource.FromFile(url);
+                }
 
                 return new UriImageSource
                 {
@@ -32,7 +36,7 @@ namespace apppasteleriav03.Converters
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ImagePathToUriConverter error: {ex.Message}");
+                Debug.WriteLine($"ImagePathToUriConverter error: {ex}");
                 return ImageSource.FromFile(PlaceholderFile);
             }
         }

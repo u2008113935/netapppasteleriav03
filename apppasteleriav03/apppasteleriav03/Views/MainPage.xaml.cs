@@ -11,7 +11,7 @@ namespace apppasteleriav03.Views
     public partial class MainPage : ContentPage
     {
         // servicio supabase 
-        readonly SupabaseService _supabase = new SupabaseService();
+        readonly SupabaseService _supabase = SupabaseService.Instance;
 
         // servicio carrito (singleton)
         readonly CartService _cart = CartService.Instance;

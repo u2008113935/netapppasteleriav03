@@ -9,6 +9,9 @@ namespace apppasteleriav03.Services
     /// </summary>
     public static class ImageHelper
     {
+        // Nombre del fichero placeholder usado por la app (un único sitio de verdad)
+        public const string DefaultPlaceholder = "placeholder_food.png";
+
         public static string? Normalize(string? raw)
         {
             if (string.IsNullOrWhiteSpace(raw))
@@ -16,6 +19,9 @@ namespace apppasteleriav03.Services
 
             // Descodifica y limpia
             var decoded = Uri.UnescapeDataString(raw).Trim();
+
+            // Eliminar comillas sobrantes (codificadas o literales) que puedan romper tokens
+            decoded = decoded.Replace("%22", string.Empty).Trim().Trim('"').Trim('\'');
 
             // Si ya es una URL absoluta (signed o pública) la usamos tal cual
             if (Uri.TryCreate(decoded, UriKind.Absolute, out var absolute))

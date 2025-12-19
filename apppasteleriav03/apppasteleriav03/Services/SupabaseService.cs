@@ -65,6 +65,8 @@ namespace apppasteleriav03.Services
                 var resp = await _http.GetAsync($"{_url}/rest/v1/productos?select=*");
                 var json = await resp.Content.ReadAsStringAsync();
 
+                Debug.WriteLine($"GetProductsAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+
                 if (!resp.IsSuccessStatusCode)
                 {
                     Debug.WriteLine($"GetProductsAsync failed: {resp.StatusCode} - {json}");
@@ -72,16 +74,50 @@ namespace apppasteleriav03.Services
                 }
 
                 var products = JsonSerializer.Deserialize<List<Product>>(json, _jsonOpts) ?? new List<Product>();
-                NormalizeProductImages(products);
-                return products;
+
+                // Validar y filtrar productos inválidos
+                var validProducts = new List<Product>();
+                foreach (var p in products)
+                {
+                    try
+                    {
+                        var errs = p.Validate();
+                        if (errs == null || errs.Count == 0)
+                        {
+                            validProducts.Add(p);
+                        }
+                        else
+                        {
+                            Debug.WriteLine($"SupabaseService: producto inválido (id={p?.Id}): {string.Join("; ", errs)}");
+                        }
+                    }
+                    catch (Exception vEx)
+                    {
+                        Debug.WriteLine($"SupabaseService: error validando producto (maybe malformed JSON item): {vEx}");
+                    }
+                }
+
+                // Normalizar las URLs de imagen (ImageHelper.Normalize + fallback)
+                NormalizeProductImages(validProducts);
+
+                // Logear unos ejemplos para depuración
+                int logged = 0;
+                foreach (var p in validProducts)
+                {
+                    Debug.WriteLine($"Product ready: Id={p.Id} Nombre='{p.Nombre}' Imagen='{p.ImagenPath}' Precio={p.Precio}");
+                    if (++logged >= 5) break;
+                }
+
+                return validProducts;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("SupabaseService.GetProductsAsync error: " + ex.Message);
+                Debug.WriteLine($"SupabaseService.GetProductsAsync error: {ex}");
                 return new List<Product>();
             }
         }
 
+        // Dentro de SupabaseService.cs
         void NormalizeProductImages(IEnumerable<Product>? products)
         {
             if (products == null) return;
@@ -89,39 +125,23 @@ namespace apppasteleriav03.Services
             {
                 try
                 {
-                    var raw = p.ImagenPath;
-                    if (string.IsNullOrWhiteSpace(raw))
+                    var normalized = ImageHelper.Normalize(p.ImagenPath);
+                    if (string.IsNullOrWhiteSpace(normalized))
                     {
-                        p.ImagenPath = "avatar_placeholder.png"; // local en Resources/Images
+                        // Usar placeholder definido en ImageHelper para evitar mismatch de nombres
+                        p.ImagenPath = ImageHelper.DefaultPlaceholder; // local en Resources/Images
                         Debug.WriteLine($"Product '{p.Nombre}' image normalized -> (placeholder)");
-                        continue;
-                    }
-
-                    var decoded = Uri.UnescapeDataString(raw).Trim();
-                    if (Uri.TryCreate(decoded, UriKind.Absolute, out var absolute))
-                    {
-                        p.ImagenPath = absolute.ToString();
                     }
                     else
                     {
-                        var fileName = decoded.TrimStart('/');
-                        if (string.IsNullOrWhiteSpace(SupabaseConfig.BUCKET_NAME))
-                        {
-                            p.ImagenPath = "avatar_placeholder.png";
-                            Debug.WriteLine($"NormalizeProductImages: BUCKET_NAME vacío para '{p.Nombre}'");
-                        }
-                        else
-                        {
-                            p.ImagenPath = $"{_url}/storage/v1/object/public/{SupabaseConfig.BUCKET_NAME}/{Uri.EscapeDataString(fileName)}";
-                        }
+                        p.ImagenPath = normalized;
+                        Debug.WriteLine($"Product '{p.Nombre}' image normalized -> {p.ImagenPath}");
                     }
-
-                    Debug.WriteLine($"Product '{p.Nombre}' image normalized -> {p.ImagenPath}");
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Error normalizando imagen para {p?.Nombre}: {ex}");
-                    p.ImagenPath = "avatar_placeholder.png";
+                    p.ImagenPath = ImageHelper.DefaultPlaceholder;
                 }
             }
         }
