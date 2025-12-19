@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 
 namespace apppasteleriav03.Services
 {
+
+ 
     public class SupabaseService
     {
         public static SupabaseService Instance { get; } = new SupabaseService();
@@ -21,8 +23,8 @@ namespace apppasteleriav03.Services
 
         public SupabaseService()
         {
-            _url = SupabaseConfig.SUPABASE_URL.TrimEnd('/');
-            _anon = SupabaseConfig.SUPABASE_ANON_KEY;
+            _url = SupabaseConfig.SUPABASE_URL?.TrimEnd('/') ?? string.Empty;
+            _anon = SupabaseConfig.SUPABASE_ANON_KEY ?? string.Empty;
 
             _http = new HttpClient();
 
@@ -85,26 +87,42 @@ namespace apppasteleriav03.Services
             if (products == null) return;
             foreach (var p in products)
             {
-                var raw = p.ImagenPath;
-                if (string.IsNullOrWhiteSpace(raw))
+                try
                 {
-                    p.ImagenPath = null;
-                    Debug.WriteLine($"Product '{p.Nombre}' image normalized -> (null)");
-                    continue;
-                }
+                    var raw = p.ImagenPath;
+                    if (string.IsNullOrWhiteSpace(raw))
+                    {
+                        p.ImagenPath = "avatar_placeholder.png"; // local en Resources/Images
+                        Debug.WriteLine($"Product '{p.Nombre}' image normalized -> (placeholder)");
+                        continue;
+                    }
 
-                var decoded = Uri.UnescapeDataString(raw).Trim();
-                if (Uri.TryCreate(decoded, UriKind.Absolute, out var absolute))
-                {
-                    p.ImagenPath = absolute.ToString();
-                }
-                else
-                {
-                    var fileName = decoded.TrimStart('/');
-                    p.ImagenPath = $"{_url}/storage/v1/object/public/{SupabaseConfig.BUCKET_NAME}/{Uri.EscapeDataString(fileName)}";
-                }
+                    var decoded = Uri.UnescapeDataString(raw).Trim();
+                    if (Uri.TryCreate(decoded, UriKind.Absolute, out var absolute))
+                    {
+                        p.ImagenPath = absolute.ToString();
+                    }
+                    else
+                    {
+                        var fileName = decoded.TrimStart('/');
+                        if (string.IsNullOrWhiteSpace(SupabaseConfig.BUCKET_NAME))
+                        {
+                            p.ImagenPath = "avatar_placeholder.png";
+                            Debug.WriteLine($"NormalizeProductImages: BUCKET_NAME vacío para '{p.Nombre}'");
+                        }
+                        else
+                        {
+                            p.ImagenPath = $"{_url}/storage/v1/object/public/{SupabaseConfig.BUCKET_NAME}/{Uri.EscapeDataString(fileName)}";
+                        }
+                    }
 
-                Debug.WriteLine($"Product '{p.Nombre}' image normalized -> {p.ImagenPath}");
+                    Debug.WriteLine($"Product '{p.Nombre}' image normalized -> {p.ImagenPath}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error normalizando imagen para {p?.Nombre}: {ex}");
+                    p.ImagenPath = "avatar_placeholder.png";
+                }
             }
         }
 
@@ -166,7 +184,7 @@ namespace apppasteleriav03.Services
             return createdOrder;
         }
 
-        public async Task<(bool Success, string? AccessToken, string? RefreshToken, Guid? UserId, string? Error)> SignInAsync(string email, string password)
+        public async Task<(bool Success, string? AccessToken, string? RefreshToken, Guid? UserId, string? Error, string? Email)> SignInAsync(string email, string password)
         {
             try
             {
@@ -176,38 +194,52 @@ namespace apppasteleriav03.Services
                 var resp = await _http.PostAsync($"{_url}/auth/v1/token?grant_type=password", content);
                 var js = await resp.Content.ReadAsStringAsync();
 
-                if (!resp.IsSuccessStatusCode) return (false, null, null, null, js);
+                if (!resp.IsSuccessStatusCode) return (false, null, null, null, js, null);
 
                 using var doc = JsonDocument.Parse(js);
                 var root = doc.RootElement;
 
                 var accessToken = root.GetProperty("access_token").GetString();
                 var refreshToken = root.TryGetProperty("refresh_token", out var r) ? r.GetString() : null;
-                var userIdStr = root.GetProperty("user").GetProperty("id").GetString();
+                var userElement = root.GetProperty("user");
+                var userIdStr = userElement.GetProperty("id").GetString();
+
+                // Intentar extraer email del objeto user si está presente
+                string? userEmail = null;
+                if (userElement.TryGetProperty("email", out var eprop))
+                    userEmail = eprop.GetString();
 
                 Guid? userId = null;
                 if (!string.IsNullOrWhiteSpace(userIdStr) && Guid.TryParse(userIdStr, out var guid)) userId = guid;
 
-                return (true, accessToken, refreshToken, userId, null);
+                return (true, accessToken, refreshToken, userId, null, userEmail);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"SignInAsync error: {ex.Message}");
-                return (false, null, null, null, ex.Message);
+                return (false, null, null, null, ex.Message, null);
             }
         }
 
-        public async Task<Profile> GetProfileAsync(Guid id)
+        public async Task<Profile?> GetProfileAsync(Guid id)
         {
-            var resp = await _http.GetAsync($"{_url}/rest/v1/profiles?id=eq.{id}&select=*");
-            var json = await resp.Content.ReadAsStringAsync();
-            if (!resp.IsSuccessStatusCode)
+            try
             {
-                Debug.WriteLine($"GetProfileAsync failed: {resp.StatusCode} - {json}");
-                throw new Exception(json);
+                var resp = await _http.GetAsync($"{_url}/rest/v1/profiles?id=eq.{id}&select=*");
+                var json = await resp.Content.ReadAsStringAsync();
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetProfileAsync failed: {resp.StatusCode} - {json}");
+                    return null;
+                }
+                var list = JsonSerializer.Deserialize<List<Profile>>(json, _jsonOpts);
+                return (list != null && list.Count > 0) ? list[0] : null;
             }
-            var list = JsonSerializer.Deserialize<List<Profile>>(json, _jsonOpts);
-            return (list != null && list.Count > 0) ? list[0] : null;
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetProfileAsync exception: {ex}");
+                return null;
+            }
         }
     }
 }

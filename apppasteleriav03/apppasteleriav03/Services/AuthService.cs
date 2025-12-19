@@ -29,7 +29,7 @@ namespace apppasteleriav03.Services
         public string? UserId { get; private set; }
 
         //Correo electrónico del usuario autenticado
-        public string UserEmail { get; set; }
+        public string? UserEmail { get; set; }
 
         // Indica si el token esta cargado en memoria 
         public bool IsAuthenticated => !string.IsNullOrEmpty(AccessToken);
@@ -61,7 +61,7 @@ namespace apppasteleriav03.Services
 
                 AccessToken = res.AccessToken;  // Guardar AccessToken en memoria
                 UserId = res.UserId?.ToString(); // Guardar UserId como string
-                UserEmail = email.Trim(); // Guardar email en memoria
+                UserEmail = !string.IsNullOrWhiteSpace(res.Email) ? res.Email : email.Trim(); // Guardar email en memoria
 
 
                 try

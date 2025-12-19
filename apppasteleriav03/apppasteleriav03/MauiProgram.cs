@@ -23,7 +23,24 @@ namespace apppasteleriav03
 #endif
 
             // Construir la app
-            var app = builder.Build();           
+            var app = builder.Build();
+
+            // Diagnóstico global
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                try
+                {
+                    var ex = e.ExceptionObject as Exception;
+                    System.Diagnostics.Debug.WriteLine($"UnhandledException (AppDomain): {ex}");
+                }
+                catch { }
+            };
+
+            TaskScheduler.UnobservedTaskException += (s, e) =>
+            {
+                System.Diagnostics.Debug.WriteLine($"UnobservedTaskException: {e.Exception}");
+                e.SetObserved();
+            };
 
             return app;
         }
