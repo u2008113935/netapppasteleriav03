@@ -17,7 +17,12 @@ namespace apppasteleriav03.Services
 
         //Estado en memoria de la sesión
         public string? AccessToken { get; private set; }
+
+        //Identificador del usuario autenticado
         public string? UserId { get; private set; }
+
+        //Correo electrónico del usuario autenticado
+        public string UserEmail { get; set; }
 
         // Indica si el token esta cargado en memoria 
         public bool IsAuthenticated => !string.IsNullOrEmpty(AccessToken);

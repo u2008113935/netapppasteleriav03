@@ -122,23 +122,59 @@ namespace apppasteleriav03
                 if (string.IsNullOrWhiteSpace(userIdStr))
                     userIdStr = await SecureStorage.Default.GetAsync("auth_user_id");
 
+                string authEmail = AuthService.Instance?.UserEmail;
+
+                if (string.IsNullOrWhiteSpace(authEmail))
+                {
+                    try
+                    {
+                        var currentUser = SupabaseService.Instance?.GetCurrentUser();
+                        authEmail = currentUser?.Email;
+                    }
+                    catch 
+                    { 
+                    //ignorar no critico
+                    }
+                }
+
+
                 if (!string.IsNullOrWhiteSpace(userIdStr) && Guid.TryParse(userIdStr, out Guid userId))
                 {
                     var profile = await SupabaseService.Instance.GetProfileAsync(userId);
+                    
                     if (profile != null)
                     {
+                        
+                        if(!string.IsNullOrWhiteSpace(authEmail))
+                        {
+                            profile.Email = authEmail;
+                        }
+                        
                         CurrentProfile = profile;
-                        Debug.WriteLine($"Profile loaded: {profile.FullName}");
+                        Debug.WriteLine($"Profile loaded: {profile.FullName} ({profile.Email})");
                     }
                     else
                     {
-                        // fallback
-                        CurrentProfile = new Profile { FullName = "Usuario", Email = "usuario@ejemplo.com" };
+                        var fallback = new Profile { FullName = "Usuario" };
+                        if (!string.IsNullOrWhiteSpace(authEmail))
+                            fallback.Email = authEmail;
+                        else
+                            fallback.Email = "usuario@ejemplo.com";
+
+                            // fallback
+                            CurrentProfile = fallback
+
                     }
                 }
                 else
                 {
-                    CurrentProfile = new Profile { FullName = "Invitado", Email = "Inicia sesión para guardar tus pedidos" };
+                    var guest = new Profile { FullName = "Invitado" };
+                    if (!string.IsNullOrWhiteSpace(authEmail))
+                        guest.Email = authEmail;
+                    else
+                        guest.Email = "Inicia sesión para guardar tus pedidos";
+
+                    CurrentProfile = guest;
                 }
             }
             catch (Exception ex)

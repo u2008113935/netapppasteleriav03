@@ -12,10 +12,16 @@ namespace apppasteleriav03.Models
         [JsonPropertyName("full_name")]
         public string FullName { get; set; } = string.Empty;
 
+        // Alinear con el nombre de columna usado en tu API (se usa "avatar_url" en el payload)
         [JsonPropertyName("avatar_url")]
         public string AvatarUrl { get; set; } = string.Empty;
 
         [JsonIgnore]
+
+        // Propiedad adicional para el correo electrónico
+        public string Email { get; set; } = string.Empty;
+
+        // Propiedad calculada para obtener la URL pública completa del avatar
         public string AvatarPublicUrl
         {
             get
