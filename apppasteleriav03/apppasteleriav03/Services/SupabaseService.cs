@@ -6,11 +6,16 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 
 namespace apppasteleriav03.Services
-{    
+{
+    /// <summary>
+    /// Servicio ligero para llamadas REST a Supabase (tables: productos, pedidos, pedido_items, order_locations, profiles).
+    /// Implementa métodos comunes usados por MainPage, OrderPage y LiveTrackingPage.
+    /// </summary>
     public class SupabaseService
     {
         public static SupabaseService Instance { get; } = new SupabaseService();
@@ -25,7 +30,10 @@ namespace apppasteleriav03.Services
             _url = SupabaseConfig.SUPABASE_URL?.TrimEnd('/') ?? string.Empty;
             _anon = SupabaseConfig.SUPABASE_ANON_KEY ?? string.Empty;
 
-            _http = new HttpClient();
+            _http = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
 
             if (!string.IsNullOrWhiteSpace(_anon))
                 _http.DefaultRequestHeaders.Add("apikey", _anon);
@@ -57,21 +65,19 @@ namespace apppasteleriav03.Services
             };
         }
 
+        #region Products
 
         public async Task<List<Product>> GetProductsAsync(int? limit = null, CancellationToken cancellationToken = default)
         {
             try
             {
-                // Construir la URL (permitir limit para pruebas)
                 var url = $"{_url}/rest/v1/productos?select=*";
                 if (limit.HasValue && limit.Value > 0)
                     url += $"&limit={limit.Value}";
 
                 Debug.WriteLine($"GetProductsAsync: requesting {url}");
-
                 using var resp = await _http.GetAsync(url, cancellationToken);
                 var json = await resp.Content.ReadAsStringAsync(cancellationToken);
-
                 Debug.WriteLine($"GetProductsAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
 
                 if (!resp.IsSuccessStatusCode)
@@ -81,7 +87,6 @@ namespace apppasteleriav03.Services
                 }
 
                 var products = JsonSerializer.Deserialize<List<Product>>(json, _jsonOpts) ?? new List<Product>();
-                Debug.WriteLine($"GetProductsAsync: deserialized products count = {products.Count}");
 
                 // Validar y filtrar productos inválidos
                 var validProducts = new List<Product>();
@@ -91,30 +96,18 @@ namespace apppasteleriav03.Services
                     {
                         var errs = p.Validate();
                         if (errs == null || errs.Count == 0)
-                        {
                             validProducts.Add(p);
-                        }
                         else
-                        {
                             Debug.WriteLine($"SupabaseService: producto inválido (id={p?.Id}): {string.Join("; ", errs)}");
-                        }
                     }
                     catch (Exception vEx)
                     {
-                        Debug.WriteLine($"SupabaseService: error validando producto (maybe malformed JSON item): {vEx}");
+                        Debug.WriteLine($"SupabaseService: error validando producto: {vEx}");
                     }
                 }
 
-                // Normalizar las URLs de imagen (ImageHelper.Normalize + fallback)
+                // Normalizar imagenes y fallback
                 NormalizeProductImages(validProducts);
-
-                // Logear unos ejemplos para depuración
-                int logged = 0;
-                foreach (var p in validProducts)
-                {
-                    Debug.WriteLine($"Product ready: Id={p.Id} Nombre='{p.Nombre}' Imagen='{p.ImagenPath}' Precio={p.Precio}");
-                    if (++logged >= 5) break;
-                }
 
                 return validProducts;
             }
@@ -130,16 +123,15 @@ namespace apppasteleriav03.Services
             }
         }
 
-
-        public async Task<Product?> GetProductAsync(Guid id)
+        public async Task<Product?> GetProductAsync(Guid id, CancellationToken cancellationToken = default)
         {
             try
             {
-                var resp = await _http.GetAsync($"{_url}/rest/v1/productos?id=eq.{id}&select=*");
-                var json = await resp.Content.ReadAsStringAsync();
+                var url = $"{_url}/rest/v1/productos?id=eq.{id}&select=*";
+                using var resp = await _http.GetAsync(url, cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
 
                 Debug.WriteLine($"GetProductAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
-
                 if (!resp.IsSuccessStatusCode)
                 {
                     Debug.WriteLine($"GetProductAsync failed: {resp.StatusCode} - {json}");
@@ -148,13 +140,8 @@ namespace apppasteleriav03.Services
 
                 var list = JsonSerializer.Deserialize<List<Product>>(json, _jsonOpts);
                 var product = (list != null && list.Count > 0) ? list[0] : null;
-
                 if (product != null)
-                {
-                    // Normalizar imagen del producto
-                    var normalized = ImageHelper.Normalize(product.ImagenPath);
-                    product.ImagenPath = string.IsNullOrWhiteSpace(normalized) ? ImageHelper.DefaultPlaceholder : normalized;
-                }
+                    product.ImagenPath = string.IsNullOrWhiteSpace(ImageHelper.Normalize(product.ImagenPath)) ? ImageHelper.DefaultPlaceholder : ImageHelper.Normalize(product.ImagenPath);
 
                 return product;
             }
@@ -165,69 +152,34 @@ namespace apppasteleriav03.Services
             }
         }
 
-        // Reemplaza el método NormalizeProductImages en SupabaseService.cs por este:
         void NormalizeProductImages(IEnumerable<Product>? products)
         {
-            try
-            {
-                Debug.WriteLine($"NormalizeProductImages: start - products count = {(products == null ? 0 : products.Count())}");
-            }
-            catch
-            {
-                // si products no es un IEnumerable que implementa Count, ignoramos el Count() y seguimos
-                Debug.WriteLine("NormalizeProductImages: start - (could not read count)");
-            }
-
             if (products == null) return;
 
             foreach (var p in products)
             {
                 try
                 {
-                    Debug.WriteLine($"NormalizeProductImages: processing product id={p?.Id} " +
-                        $"nombre='{p?.Nombre}' " +
-                        $"rawImagenLen={(p?.ImagenPath?.Length ?? 0)} " +
-                        $"rawPreview='{(p?.ImagenPath != null && 
-                        p.ImagenPath.Length > 120 ? 
-                        p.ImagenPath.Substring(0, 120) : 
-                        p?.ImagenPath)}'");
-
                     var normalized = ImageHelper.Normalize(p.ImagenPath);
-
-                    Debug.WriteLine($"NormalizeProductImages: normalized for id={p?.Id} " +
-                        $"=> {(normalized == null ? "(null)" : 
-                        (normalized.Length > 200 ? normalized.Substring(0, 200) : normalized))}");
-
-                    if (string.IsNullOrWhiteSpace(normalized))
-                    {
-                        // Usar placeholder definido en ImageHelper para evitar mismatch de nombres
-                        p.ImagenPath = ImageHelper.DefaultPlaceholder; // local en Resources/Images
-                        Debug.WriteLine($"NormalizeProductImages: assigned placeholder for '{p?.Nombre}'");
-                    }
-                    else
-                    {
-                        p.ImagenPath = normalized;
-                        Debug.WriteLine($"NormalizeProductImages: assigned normalized for '{p?.Nombre}' " +
-                            $"-> {p.ImagenPath}");
-                    }
+                    p.ImagenPath = string.IsNullOrWhiteSpace(normalized) ? ImageHelper.DefaultPlaceholder : normalized;
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Error normalizando imagen para {p?.Nombre}: {ex}");
+                    Debug.WriteLine($"NormalizeProductImages: error for {p?.Nombre}: {ex}");
                     p.ImagenPath = ImageHelper.DefaultPlaceholder;
                 }
             }
-
-            Debug.WriteLine("NormalizeProductImages: end");
         }
 
+        #endregion
 
-        public async Task<Order> CreateOrderAsync(Guid userid, List<OrderItem> items)
+        #region Orders & Items
+
+        // Crear pedido + items (ya existía, se mantiene con algunas validaciones)
+        public async Task<Order> CreateOrderAsync(Guid userid, List<OrderItem> items, CancellationToken cancellationToken = default)
         {
-            var total = 0m;
-            foreach (var it in items) total += it.Price * it.Quantity;
+            var total = items.Sum(it => it.Price * it.Quantity);
 
-            // Usamos user_id por convención; si tu BD usa 'userid' cambia aquí o en la BD.
             var orderPayload = new
             {
                 userid = userid,
@@ -240,8 +192,8 @@ namespace apppasteleriav03.Services
             using var orderReq = new HttpRequestMessage(HttpMethod.Post, $"{_url}/rest/v1/pedidos") { Content = orderContent };
             orderReq.Headers.Add("Prefer", "return=representation");
 
-            var resp = await _http.SendAsync(orderReq);
-            var createdOrderJson = await resp.Content.ReadAsStringAsync();
+            var resp = await _http.SendAsync(orderReq, cancellationToken);
+            var createdOrderJson = await resp.Content.ReadAsStringAsync(cancellationToken);
             if (!resp.IsSuccessStatusCode)
             {
                 Debug.WriteLine($"CreateOrderAsync (order) failed: {resp.StatusCode} - {createdOrderJson}");
@@ -252,25 +204,21 @@ namespace apppasteleriav03.Services
             if (created == null || created.Count == 0) throw new Exception("No se pudo crear el pedido.");
             var createdOrder = created[0];
 
-            // Asegúrate que la clave que uses ('pedido_id' o 'pedidos_id') coincide con tu tabla pedido_items
-            var itemsPayload = new List<object>();
-            foreach (var it in items)
+            // Insertar items en batch
+            var itemsPayload = items.Select(it => new
             {
-                itemsPayload.Add(new
-                {
-                    pedido_id = createdOrder.Id,
-                    producto_id = it.ProductId,
-                    cantidad = it.Quantity,
-                    precio = it.Price
-                });
-            }
+                pedido_id = createdOrder.Id,
+                producto_id = it.ProductId,
+                cantidad = it.Quantity,
+                precio = it.Price
+            }).ToList();
 
             var itemsContent = new StringContent(JsonSerializer.Serialize(itemsPayload), Encoding.UTF8, "application/json");
             using var itemsReq = new HttpRequestMessage(HttpMethod.Post, $"{_url}/rest/v1/pedido_items") { Content = itemsContent };
             itemsReq.Headers.Add("Prefer", "return=representation");
 
-            var respItems = await _http.SendAsync(itemsReq);
-            var respItemsBody = await respItems.Content.ReadAsStringAsync();
+            var respItems = await _http.SendAsync(itemsReq, cancellationToken);
+            var respItemsBody = await respItems.Content.ReadAsStringAsync(cancellationToken);
             if (!respItems.IsSuccessStatusCode)
             {
                 Debug.WriteLine($"CreateOrderAsync (items) failed: {respItems.StatusCode} - {respItemsBody}");
@@ -280,49 +228,247 @@ namespace apppasteleriav03.Services
             return createdOrder;
         }
 
-        public async Task<(bool Success, string? AccessToken, string? RefreshToken, Guid? UserId, string? Error, string? Email)> SignInAsync(string email, string password)
+        // Obtener órdenes con filtros generales
+        public async Task<List<Order>> GetOrdersAsync(Guid? userId = null, string? status = null, bool includeItems = false, int? limit = null, CancellationToken cancellationToken = default)
         {
             try
             {
-                var payload = new { email = email, password = password };
-                var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                var sb = new StringBuilder();
+                sb.Append($"{_url}/rest/v1/pedidos?select=*");
 
-                var resp = await _http.PostAsync($"{_url}/auth/v1/token?grant_type=password", content);
-                var js = await resp.Content.ReadAsStringAsync();
+                if (userId.HasValue)
+                    sb.Append($"&userid=eq.{userId.Value}");
 
-                if (!resp.IsSuccessStatusCode) return (false, null, null, null, js, null);
+                if (!string.IsNullOrWhiteSpace(status))
+                    sb.Append($"&status=eq.{Uri.EscapeDataString(status)}");
 
-                using var doc = JsonDocument.Parse(js);
-                var root = doc.RootElement;
+                sb.Append("&order=created_at.desc");
 
-                var accessToken = root.GetProperty("access_token").GetString();
-                var refreshToken = root.TryGetProperty("refresh_token", out var r) ? r.GetString() : null;
-                var userElement = root.GetProperty("user");
-                var userIdStr = userElement.GetProperty("id").GetString();
+                if (limit.HasValue && limit.Value > 0)
+                    sb.Append($"&limit={limit.Value}");
 
-                // Intentar extraer email del objeto user si está presente
-                string? userEmail = null;
-                if (userElement.TryGetProperty("email", out var eprop))
-                    userEmail = eprop.GetString();
+                var url = sb.ToString();
+                Debug.WriteLine($"GetOrdersAsync: requesting {url}");
 
-                Guid? userId = null;
-                if (!string.IsNullOrWhiteSpace(userIdStr) && Guid.TryParse(userIdStr, out var guid)) userId = guid;
+                using var resp = await _http.GetAsync(url, cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                Debug.WriteLine($"GetOrdersAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
 
-                return (true, accessToken, refreshToken, userId, null, userEmail);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetOrdersAsync failed: {resp.StatusCode} - {json}");
+                    return new List<Order>();
+                }
+
+                var orders = JsonSerializer.Deserialize<List<Order>>(json, _jsonOpts) ?? new List<Order>();
+
+                if (includeItems && orders.Count > 0)
+                {
+                    foreach (var o in orders)
+                    {
+                        try
+                        {
+                            o.Items = await GetOrderItemsAsync(o.Id, cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"GetOrdersAsync: error getting items for order {o.Id}: {ex}");
+                        }
+                    }
+                }
+
+                return orders;
+            }
+            catch (OperationCanceledException)
+            {
+                Debug.WriteLine("GetOrdersAsync: cancelled");
+                return new List<Order>();
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"SignInAsync error: {ex.Message}");
-                return (false, null, null, null, ex.Message, null);
+                Debug.WriteLine($"GetOrdersAsync error: {ex}");
+                return new List<Order>();
             }
         }
 
-        public async Task<Profile?> GetProfileAsync(Guid id)
+        // Obtener órdenes de un usuario (nombre claro)
+        public async Task<List<Order>> GetOrdersByUserAsync(Guid userId, bool includeItems = false, CancellationToken cancellationToken = default)
+        {
+            return await GetOrdersAsync(userId: userId, includeItems: includeItems, cancellationToken: cancellationToken);
+        }
+
+        // Obtener una orden específica
+        public async Task<Order?> GetOrderAsync(Guid orderId, CancellationToken cancellationToken = default)
         {
             try
             {
-                var resp = await _http.GetAsync($"{_url}/rest/v1/profiles?id=eq.{id}&select=*");
-                var json = await resp.Content.ReadAsStringAsync();
+                var resp = await _http.GetAsync($"{_url}/rest/v1/pedidos?idpedido=eq.{orderId}&select=*", cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                Debug.WriteLine($"GetOrderAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetOrderAsync failed: {resp.StatusCode} - {json}");
+                    return null;
+                }
+
+                var list = JsonSerializer.Deserialize<List<Order>>(json, _jsonOpts);
+                var order = (list != null && list.Count > 0) ? list[0] : null;
+
+                if (order != null)
+                {
+                    try
+                    {
+                        order.Items = await GetOrderItemsAsync(order.Id, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"GetOrderAsync: error loading items for order {order.Id}: {ex}");
+                    }
+                }
+
+                return order;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetOrderAsync error: {ex}");
+                return null;
+            }
+        }
+
+        // Obtener items de una orden específica
+        public async Task<List<OrderItem>> GetOrderItemsAsync(Guid orderId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var resp = await _http.GetAsync($"{_url}/rest/v1/pedido_items?pedido_id=eq.{orderId}&select=*", cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                Debug.WriteLine($"GetOrderItemsAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetOrderItemsAsync failed: {resp.StatusCode} - {json}");
+                    return new List<OrderItem>();
+                }
+
+                var items = JsonSerializer.Deserialize<List<OrderItem>>(json, _jsonOpts) ?? new List<OrderItem>();
+                return items;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetOrderItemsAsync error: {ex}");
+                return new List<OrderItem>();
+            }
+        }
+
+        #endregion
+
+        #region Locations (tracking)
+
+        public async Task<List<OrderLocation>> GetOrderLocationsAsync(Guid orderId, int limit = 100, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var resp = await _http.GetAsync($"{_url}/rest/v1/order_locations?pedido_id=eq.{orderId}&order=registrado_en.desc&limit={limit}", cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                Debug.WriteLine($"GetOrderLocationsAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetOrderLocationsAsync failed: {resp.StatusCode} - {json}");
+                    return new List<OrderLocation>();
+                }
+
+                var locs = JsonSerializer.Deserialize<List<OrderLocation>>(json, _jsonOpts) ?? new List<OrderLocation>();
+                return locs;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetOrderLocationsAsync error: {ex}");
+                return new List<OrderLocation>();
+            }
+        }
+
+        // Insertar registro de ubicación (histórico)
+        public async Task<bool> InsertOrderLocationAsync(OrderLocation loc, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var payload = new[] { new
+                {
+                    pedido_id = loc.PedidoId,
+                    latitud = loc.Latitud,
+                    longitud = loc.Longitud,
+                    registrado_en = loc.RegistradoEn,
+                    dispositivo_id = loc.DispositivoId,
+                    velocidad = loc.Velocidad,
+                    rumb = loc.Rumbo
+                } };
+
+                var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var req = new HttpRequestMessage(HttpMethod.Post, $"{_url}/rest/v1/order_locations") { Content = content };
+                req.Headers.Add("Prefer", "return=representation");
+
+                var resp = await _http.SendAsync(req, cancellationToken);
+                var body = await resp.Content.ReadAsStringAsync(cancellationToken);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"InsertOrderLocationAsync failed: {resp.StatusCode} - {body}");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"InsertOrderLocationAsync error: {ex}");
+                return false;
+            }
+        }
+
+        // Actualizar ubicación actual en la fila pedidos (PATCH)
+        public async Task<bool> UpdateOrderLocationAsync(Guid orderId, double latitude, double longitude, bool enableTracking = true, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var payload = new
+                {
+                    latitud_actual = latitude,
+                    longitud_actual = longitude,
+                    seguimiento_habilitado = enableTracking
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var req = new HttpRequestMessage(HttpMethod.Patch, $"{_url}/rest/v1/pedidos?id=eq.{orderId}") { Content = content };
+                req.Headers.Add("Prefer", "return=representation");
+
+                var resp = await _http.SendAsync(req, cancellationToken);
+                var body = await resp.Content.ReadAsStringAsync(cancellationToken);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"UpdateOrderLocationAsync failed: {resp.StatusCode} - {body}");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"UpdateOrderLocationAsync error: {ex}");
+                return false;
+            }
+        }
+
+        #endregion
+
+        #region Profiles / Auth helpers
+
+        public async Task<Profile?> GetProfileAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var resp = await _http.GetAsync($"{_url}/rest/v1/profiles?id=eq.{id}&select=*", cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
                 if (!resp.IsSuccessStatusCode)
                 {
                     Debug.WriteLine($"GetProfileAsync failed: {resp.StatusCode} - {json}");
@@ -337,5 +483,7 @@ namespace apppasteleriav03.Services
                 return null;
             }
         }
+
+        #endregion
     }
 }

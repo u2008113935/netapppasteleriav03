@@ -1,12 +1,64 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="apppasteleriav03.Views.OrdersPage"
-             Title="OrdersPage">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:conv="clr-namespace:apppasteleriav03.Converters"
+    x:Class="apppasteleriav03.Views.OrderPage"
+    Title="Mis pedidos">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <conv:ImagePathToUriConverter x:Key="ImagePathToUriConverter" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="12">
+
+        <!-- Encabezado / resumen -->
+        <StackLayout Orientation="Horizontal" Spacing="12" VerticalOptions="Center" Grid.Row="0">
+            <Label Text="Pedidos" FontSize="22" FontAttributes="Bold" VerticalOptions="Center" />
+            <ActivityIndicator x:Name="LoadingIndicator" IsRunning="False" IsVisible="False" VerticalOptions="Center" />
+        </StackLayout>
+
+        <!-- Filtro / búsqueda simple (opcional) -->
+        <StackLayout Orientation="Horizontal" Grid.Row="1" Padding="0,8,0,8">
+            <Label Text="Estado:" VerticalOptions="Center" />
+            <Picker x:Name="StatusPicker" Title="Todos" WidthRequest="160" HorizontalOptions="Start" />
+            <Button Text="Actualizar" Clicked="OnRefreshClicked" HorizontalOptions="EndAndExpand" />
+        </StackLayout>
+
+        <!-- Lista de pedidos con Pull-to-Refresh -->
+        <RefreshView x:Name="RefreshViewControl" IsRefreshing="False" Refreshing="RefreshView_Refreshing" Grid.Row="2">
+            <CollectionView x:Name="OrdersCollection"
+                            SelectionMode="Single"
+                            EmptyView="No se encontraron pedidos."
+                            ItemsSource="{Binding}"
+                            SelectionChanged="OrdersCollection_SelectionChanged">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame Margin="0,6" Padding="10" HasShadow="True" BorderColor="#ddd" CornerRadius="8">
+                            <Grid ColumnDefinitions="60,*,Auto" RowDefinitions="Auto,Auto">
+                                <Image Grid.RowSpan="2" Grid.Column="0" WidthRequest="56" HeightRequest="56" Aspect="AspectFill"
+                                       Source="{Binding Items[0].ImagenPath, Converter={StaticResource ImagePathToUriConverter}}" />
+
+                                <Label Grid.Column="1" Grid.Row="0" Text="{Binding Id}" FontAttributes="Bold" FontSize="12" LineBreakMode="TailTruncation" />
+                                <Label Grid.Column="1" Grid.Row="1" Text="{Binding CreatedAt, StringFormat='Fecha: {0:yyyy-MM-dd HH:mm}'}" FontSize="12" TextColor="Gray" />
+
+                                <StackLayout Grid.Column="2" Grid.Row="0" Grid.RowSpan="2" HorizontalOptions="End" VerticalOptions="Center" Spacing="6">
+                                    <Label Text="{Binding Total, StringFormat='S/ {0:N2}'}" FontAttributes="Bold" HorizontalTextAlignment="End" />
+                                    <Label Text="{Binding Status}" FontSize="12" TextColor="White" BackgroundColor="#6c757d" Padding="6,2" HorizontalTextAlignment="Center" />
+                                    <Button Text="Ver / Seguir" Clicked="OnViewOrTrackClicked" CommandParameter="{Binding Id}" />
+                                </StackLayout>
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+
+        <!-- Pie: cantidad -->
+        <StackLayout Orientation="Horizontal" Grid.Row="3" HorizontalOptions="Start" Padding="0,8,0,0">
+            <Label x:Name="LblCount" Text="Pedidos: 0" />
+        </StackLayout>
+    </Grid>
 </ContentPage>

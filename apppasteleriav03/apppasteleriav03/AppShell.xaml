@@ -62,17 +62,17 @@
             <ShellContent Route="catalog" 
                           ContentTemplate="{DataTemplate local:MainPage}" />
         </Tab>
-
-        <!-- Pestaña Carrito -->
-        <Tab Title="Carrito" Icon="icon_cart.png">
-            <ShellContent Route="cart" 
-                          ContentTemplate="{DataTemplate local:CartPage}" />
-        </Tab>
-
+      
         <!-- Pestaña Pedidos -->
         <Tab Title="Pedidos" Icon="icon_orders.png">
             <ShellContent Route="orders" 
                           ContentTemplate="{DataTemplate local:OrdersPage}" />
+        </Tab>
+
+        <!-- Pestaña Seguimiento -->
+        <Tab Title="Seguimiento" Icon="icon_cart.png">
+            <ShellContent Route="cart" 
+                    ContentTemplate="{DataTemplate local:LiveTrackingPage}" />
         </Tab>
 
     </TabBar>
