@@ -7,11 +7,10 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Linq;
 
 namespace apppasteleriav03.Services
-{
-
- 
+{    
     public class SupabaseService
     {
         public static SupabaseService Instance { get; } = new SupabaseService();
@@ -58,12 +57,20 @@ namespace apppasteleriav03.Services
             };
         }
 
-        public async Task<List<Product>> GetProductsAsync()
+
+        public async Task<List<Product>> GetProductsAsync(int? limit = null, CancellationToken cancellationToken = default)
         {
             try
             {
-                var resp = await _http.GetAsync($"{_url}/rest/v1/productos?select=*");
-                var json = await resp.Content.ReadAsStringAsync();
+                // Construir la URL (permitir limit para pruebas)
+                var url = $"{_url}/rest/v1/productos?select=*";
+                if (limit.HasValue && limit.Value > 0)
+                    url += $"&limit={limit.Value}";
+
+                Debug.WriteLine($"GetProductsAsync: requesting {url}");
+
+                using var resp = await _http.GetAsync(url, cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
 
                 Debug.WriteLine($"GetProductsAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
 
@@ -74,6 +81,7 @@ namespace apppasteleriav03.Services
                 }
 
                 var products = JsonSerializer.Deserialize<List<Product>>(json, _jsonOpts) ?? new List<Product>();
+                Debug.WriteLine($"GetProductsAsync: deserialized products count = {products.Count}");
 
                 // Validar y filtrar productos inválidos
                 var validProducts = new List<Product>();
@@ -110,6 +118,11 @@ namespace apppasteleriav03.Services
 
                 return validProducts;
             }
+            catch (OperationCanceledException)
+            {
+                Debug.WriteLine("GetProductsAsync: cancelled");
+                return new List<Product>();
+            }
             catch (Exception ex)
             {
                 Debug.WriteLine($"SupabaseService.GetProductsAsync error: {ex}");
@@ -117,25 +130,85 @@ namespace apppasteleriav03.Services
             }
         }
 
-        // Dentro de SupabaseService.cs
+
+        public async Task<Product?> GetProductAsync(Guid id)
+        {
+            try
+            {
+                var resp = await _http.GetAsync($"{_url}/rest/v1/productos?id=eq.{id}&select=*");
+                var json = await resp.Content.ReadAsStringAsync();
+
+                Debug.WriteLine($"GetProductAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetProductAsync failed: {resp.StatusCode} - {json}");
+                    return null;
+                }
+
+                var list = JsonSerializer.Deserialize<List<Product>>(json, _jsonOpts);
+                var product = (list != null && list.Count > 0) ? list[0] : null;
+
+                if (product != null)
+                {
+                    // Normalizar imagen del producto
+                    var normalized = ImageHelper.Normalize(product.ImagenPath);
+                    product.ImagenPath = string.IsNullOrWhiteSpace(normalized) ? ImageHelper.DefaultPlaceholder : normalized;
+                }
+
+                return product;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetProductAsync error: {ex}");
+                return null;
+            }
+        }
+
+        // Reemplaza el método NormalizeProductImages en SupabaseService.cs por este:
         void NormalizeProductImages(IEnumerable<Product>? products)
         {
+            try
+            {
+                Debug.WriteLine($"NormalizeProductImages: start - products count = {(products == null ? 0 : products.Count())}");
+            }
+            catch
+            {
+                // si products no es un IEnumerable que implementa Count, ignoramos el Count() y seguimos
+                Debug.WriteLine("NormalizeProductImages: start - (could not read count)");
+            }
+
             if (products == null) return;
+
             foreach (var p in products)
             {
                 try
                 {
+                    Debug.WriteLine($"NormalizeProductImages: processing product id={p?.Id} " +
+                        $"nombre='{p?.Nombre}' " +
+                        $"rawImagenLen={(p?.ImagenPath?.Length ?? 0)} " +
+                        $"rawPreview='{(p?.ImagenPath != null && 
+                        p.ImagenPath.Length > 120 ? 
+                        p.ImagenPath.Substring(0, 120) : 
+                        p?.ImagenPath)}'");
+
                     var normalized = ImageHelper.Normalize(p.ImagenPath);
+
+                    Debug.WriteLine($"NormalizeProductImages: normalized for id={p?.Id} " +
+                        $"=> {(normalized == null ? "(null)" : 
+                        (normalized.Length > 200 ? normalized.Substring(0, 200) : normalized))}");
+
                     if (string.IsNullOrWhiteSpace(normalized))
                     {
                         // Usar placeholder definido en ImageHelper para evitar mismatch de nombres
                         p.ImagenPath = ImageHelper.DefaultPlaceholder; // local en Resources/Images
-                        Debug.WriteLine($"Product '{p.Nombre}' image normalized -> (placeholder)");
+                        Debug.WriteLine($"NormalizeProductImages: assigned placeholder for '{p?.Nombre}'");
                     }
                     else
                     {
                         p.ImagenPath = normalized;
-                        Debug.WriteLine($"Product '{p.Nombre}' image normalized -> {p.ImagenPath}");
+                        Debug.WriteLine($"NormalizeProductImages: assigned normalized for '{p?.Nombre}' " +
+                            $"-> {p.ImagenPath}");
                     }
                 }
                 catch (Exception ex)
@@ -144,7 +217,10 @@ namespace apppasteleriav03.Services
                     p.ImagenPath = ImageHelper.DefaultPlaceholder;
                 }
             }
+
+            Debug.WriteLine("NormalizeProductImages: end");
         }
+
 
         public async Task<Order> CreateOrderAsync(Guid userid, List<OrderItem> items)
         {

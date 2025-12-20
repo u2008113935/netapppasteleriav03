@@ -5,6 +5,8 @@ using System.Linq;
 using Microsoft.Maui.Controls;
 using System.Threading.Tasks;
 using System;
+using System.Diagnostics;
+using Microsoft.Maui.Essentials;
 
 namespace apppasteleriav03.Views
 {
@@ -39,6 +41,7 @@ namespace apppasteleriav03.Views
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"LoadProductsAsync error: {ex}");
                 await DisplayAlert("Error", $"No se pudieron cargar los productos: {ex.Message}", "OK");
             }
             finally
@@ -60,7 +63,35 @@ namespace apppasteleriav03.Views
 
         async void OnCartClicked(object sender, System.EventArgs e)
         {
-            await Shell.Current.GoToAsync("cart");
+
+            try
+            {
+                var routesToTry = new[] { "///cart", "//cart", "/cart" };
+                foreach (var r in routesToTry)
+                {
+                    try
+                    {
+                        Debug.WriteLine($"OnCartClicked: trying navigate to {r}");
+                        await Shell.Current.GoToAsync(r);
+                        return; // si no lanza, ya navegó correctamente
+                    }
+                    catch (Exception inner)
+                    {
+                        Debug.WriteLine($"OnCartClicked: route {r} failed: {inner.Message}");
+                    }
+                }
+
+                // Si llegamos acá, ninguna ruta funcionó
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                    DisplayAlert("Error", "No se pudo abrir el carrito (ruta no encontrada).", "OK"));
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"OnCartClicked error: {ex}");
+                await MainThread.InvokeOnMainThreadAsync(() =>
+                    DisplayAlert("Error", "No se pudo abrir el carrito.", "OK"));
+            }
+
         }
 
         void OnSearchTextChanged(object sender, TextChangedEventArgs e)

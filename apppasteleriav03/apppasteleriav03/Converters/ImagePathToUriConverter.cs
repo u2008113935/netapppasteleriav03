@@ -16,23 +16,39 @@ namespace apppasteleriav03.Converters
             try
             {
                 var raw = value as string;
+                Debug.WriteLine($"ImagePathToUriConverter: raw='{raw}'");
+
                 var url = ImageHelper.Normalize(raw);
+                Debug.WriteLine($"ImagePathToUriConverter: normalized='{url}'");
 
                 if (string.IsNullOrWhiteSpace(url))
                     return ImageSource.FromFile(PlaceholderFile);
 
-                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                // Data URI
+                if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                    return ImageSource.FromUri(new Uri(url));
+
+                // Si es una URL absoluta http/https -> usar UriImageSource (mejor caching)
+                if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+                    (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
                 {
-                    // tratar como fichero local
-                    return ImageSource.FromFile(url);
+                    return new UriImageSource
+                    {
+                        Uri = uri,
+                        CachingEnabled = true,
+                        CacheValidity = TimeSpan.FromDays(1)
+                    };
                 }
 
-                return new UriImageSource
+                // Si queda una cadena simple (sin slash) la tratamos como recurso local
+                var trimmed = url.Replace('\\', '/').TrimStart('/');
+                if (!string.IsNullOrWhiteSpace(trimmed) && !trimmed.Contains("/"))
                 {
-                    Uri = uri,
-                    CachingEnabled = true,
-                    CacheValidity = TimeSpan.FromDays(1)
-                };
+                    return ImageSource.FromFile(trimmed);
+                }
+
+                // Fallback: evitar que Glide intente abrir rutas con '/' como fichero local (evita ENOENT)
+                return ImageSource.FromFile(PlaceholderFile);
             }
             catch (Exception ex)
             {

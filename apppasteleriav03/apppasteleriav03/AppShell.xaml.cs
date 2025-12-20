@@ -41,6 +41,7 @@ namespace apppasteleriav03
             Routing.RegisterRoute("checkout", typeof(CheckoutPage));
             Routing.RegisterRoute("login", typeof(LoginPage));
             Routing.RegisterRoute("profile", typeof(ProfilePage));
+            Routing.RegisterRoute("cart", typeof(Views.CartPage));
 
             this.BindingContext = this;
 
