@@ -12,6 +12,19 @@ using System.Linq;
 
 namespace apppasteleriav03.Services
 {
+    /// Modelo de respuesta para autenticación
+    /// </summary>
+    public class AuthResponse
+    {
+        public bool Success { get; set; }
+        public string? Error { get; set; }
+        public string? AccessToken { get; set; }
+        public string? RefreshToken { get; set; }
+        public Guid? UserId { get; set; }
+        public string? Email { get; set; }
+    }
+
+
     /// <summary>
     /// Servicio ligero para llamadas REST a Supabase (tables: productos, pedidos, pedido_items, order_locations, profiles).
     /// Implementa métodos comunes usados por MainPage, OrderPage y LiveTrackingPage.

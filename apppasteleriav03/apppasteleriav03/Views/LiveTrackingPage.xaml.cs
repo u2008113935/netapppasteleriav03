@@ -1,11 +1,13 @@
-using apppasteleriav03.Models;
+ï»¿using apppasteleriav03.Models;
 using apppasteleriav03.Services;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Maps;
-using Microsoft.Maui.Controls.Shapes;
+// âŒ ELIMINAR esta lÃ­nea para evitar la ambigÃ¼edad con Polyline
+// using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Devices.Sensors;
 using Microsoft.Maui.Graphics;
+using Microsoft.Maui.Maps;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -25,13 +27,13 @@ namespace apppasteleriav03.Views
         readonly int _pollIntervalSeconds = 5;
 
         Pin? _courierPin;
-        Polyline? _routeLine;
+        Microsoft.Maui.Controls.Maps.Polyline? _routeLine;  // âœ… Especificamos explÃ­citamente
 
         public LiveTrackingPage(Guid orderId)
         {
             InitializeComponent();
             _orderId = orderId;
-            _routeLine = new Polyline
+            _routeLine = new Microsoft.Maui.Controls.Maps.Polyline  // âœ… Especificamos explÃ­citamente
             {
                 StrokeColor = Colors.Blue,
                 StrokeWidth = 4
@@ -42,8 +44,8 @@ namespace apppasteleriav03.Views
         protected override void OnAppearing()
         {
             base.OnAppearing();
-            // No iniciar automát. esperar a que el usuario presione Iniciar
-            // Opcional: iniciar automáticamente:
+            // No iniciar automÃ¡t.  esperar a que el usuario presione Iniciar
+            // Opcional: iniciar automÃ¡ticamente: 
             // StartPolling();
         }
 
@@ -107,13 +109,13 @@ namespace apppasteleriav03.Views
             }
         }
 
-        // Llamada única para forzar actualización manual
+        // Llamada Ãºnica para forzar actualizaciÃ³n manual
         private async void OnManualRefreshClicked(object sender, EventArgs e)
         {
             await RefreshOnceAsync(CancellationToken.None);
         }
 
-        // Realiza una única consulta y actualiza mapa/UI
+        // Realiza una Ãºnica consulta y actualiza mapa/UI
         async Task RefreshOnceAsync(CancellationToken token)
         {
             try
@@ -132,7 +134,7 @@ namespace apppasteleriav03.Views
                 await MainThread.InvokeOnMainThreadAsync(() =>
                 {
                     LblStatus.Text = $"Estado: {order.Status} | Repartidor: {(order.RepartidorAsignado?.ToString() ?? "-")}";
-                    LblLastUpdate.Text = $"Última actualización: {DateTime.Now:HH:mm:ss}";
+                    LblLastUpdate.Text = $"Ãšltima actualizaciÃ³n: {DateTime.Now:HH:mm:ss}";
                 });
 
                 // Actualizar pin del repartidor si hay lat/lng
@@ -160,38 +162,38 @@ namespace apppasteleriav03.Views
                             _courierPin.Location = loc;
                         }
 
-                        // Añadir punto a polyline (ruta)
+                        // AÃ±adir punto a polyline (ruta)
                         if (_routeLine == null)
                         {
-                            _routeLine = new Polyline { StrokeColor = Colors.Blue, StrokeWidth = 4 };
+                            _routeLine = new Microsoft.Maui.Controls.Maps.Polyline { StrokeColor = Colors.Blue, StrokeWidth = 4 };
                             MapControl.MapElements.Add(_routeLine);
                         }
                         _routeLine.Geopath.Add(loc);
                     });
                 }
 
-                // Opcional: cargar histórico reciente y dibujar ruta completa
+                // Opcional: cargar histÃ³rico reciente y dibujar ruta completa
                 var locs = await _supabase.GetOrderLocationsAsync(_orderId, limit: 200, cancellationToken: token);
                 if (locs != null && locs.Count > 0)
                 {
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
                         // reconstruir polyline
-                        _routeLine ??= new Polyline { StrokeColor = Colors.Blue, StrokeWidth = 4 };
+                        _routeLine ??= new Microsoft.Maui.Controls.Maps.Polyline { StrokeColor = Colors.Blue, StrokeWidth = 4 };
                         _routeLine.Geopath.Clear();
 
-                        // Los registros vienen ordenados por registrado_en desc; invertimos para dibujar en orden cronológico
+                        // Los registros vienen ordenados por registrado_en desc; invertimos para dibujar en orden cronolÃ³gico
                         foreach (var ll in locs.OrderBy(l => l.RegistradoEn))
                         {
                             _routeLine.Geopath.Add(new Location(ll.Latitud, ll.Longitud));
                         }
 
-                        // mover cámara al último punto
+                        // mover cÃ¡mara al Ãºltimo punto
                         var last = locs.OrderBy(l => l.RegistradoEn).Last();
                         var lastLoc = new Location(last.Latitud, last.Longitud);
                         MapControl.MoveToRegion(MapSpan.FromCenterAndRadius(lastLoc, Distance.FromKilometers(1)));
 
-                        // actualizar pin también con el último
+                        // actualizar pin tambiÃ©n con el Ãºltimo
                         if (_courierPin == null)
                         {
                             _courierPin = new Pin { Label = "Repartidor", Location = lastLoc };

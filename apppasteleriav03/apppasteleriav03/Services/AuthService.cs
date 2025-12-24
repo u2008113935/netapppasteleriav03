@@ -1,175 +1,561 @@
-﻿using System;
-using System.Threading.Tasks;
-using Microsoft.Maui.Storage;
+﻿using apppasteleriav03.Models;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Linq;
 
 namespace apppasteleriav03.Services
 {
-    // Modelo simple de usuario autenticado
-    public class AuthUser
+    /// <summary>
+    /// Modelo de respuesta para autenticación
+    /// </summary>
+    public class AuthResponse
     {
-        public string? Id { get; set; }
+        public bool Success { get; set; }
+        public string? Error { get; set; }
+        public string? AccessToken { get; set; }
+        public string? RefreshToken { get; set; }
+        public Guid? UserId { get; set; }
         public string? Email { get; set; }
     }
-    
-    // Servicio de autenticación por llamadas reales a Supabase REST.
-    public class AuthService
+
+    /// <summary>
+    /// Servicio ligero para llamadas REST a Supabase (tables:  productos, pedidos, pedido_items, order_locations, profiles).
+    /// Implementa métodos comunes usados por MainPage, OrderPage y LiveTrackingPage. 
+    /// </summary>
+    public class SupabaseService
     {
-        public static AuthService Instance { get; } = new AuthService();
+        public static SupabaseService Instance { get; } = new SupabaseService();
 
-        //Claves para el SecureStorage
-        const string TokenKey = "auth_token";
-        const string RefreshKey = "auth_refresh";
-        const string UserIdKey = "auth_user_id";
+        readonly HttpClient _http;
+        readonly string _url;
+        readonly string _anon;
+        readonly JsonSerializerOptions _jsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
-        //Estado en memoria de la sesión
-        public string? AccessToken { get; private set; }
-
-        //Identificador del usuario autenticado
-        public string? UserId { get; private set; }
-
-        //Correo electrónico del usuario autenticado
-        public string? UserEmail { get; set; }
-
-        // Indica si el token esta cargado en memoria 
-        public bool IsAuthenticated => !string.IsNullOrEmpty(AccessToken);
-
-        //Constructor
-        private AuthService()
+        public SupabaseService()
         {
+            _url = SupabaseConfig.SUPABASE_URL?.TrimEnd('/') ?? string.Empty;
+            _anon = SupabaseConfig.SUPABASE_ANON_KEY ?? string.Empty;
+
+            _http = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+
+            if (!string.IsNullOrWhiteSpace(_anon))
+                _http.DefaultRequestHeaders.Add("apikey", _anon);
+
+            _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         }
 
-        // Método de ejemplo: reemplazar con SupabaseAuth o tu API
-        public async Task<bool> SignInAsync(string email, string password)
+        // Permite setear el token del usuario (Authorization:  Bearer ...)
+        public void SetUserToken(string? token)
         {
-            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            _http.DefaultRequestHeaders.Authorization = null;
+            if (!string.IsNullOrWhiteSpace(token))
             {
-                Debug.WriteLine("AuthService.SignInAsync: email o password vacíos");
-                return false;
+                _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                Debug.WriteLine($"[SupabaseService]:  Authorization set:  {_http.DefaultRequestHeaders.Authorization}");
             }
+            else
+            {
+                Debug.WriteLine("[SupabaseService]:  Authorization header cleared.");
+            }
+        }
 
+        public AuthUser GetCurrentUser()
+        {
+            return new AuthUser
+            {
+                Id = AuthService.Instance.UserId,
+                Email = AuthService.Instance.UserEmail
+            };
+        }
+
+        #region Authentication
+
+        /// <summary>
+        /// Autenticar usuario con email y contraseña
+        /// </summary>
+        public async Task<AuthResponse> SignInAsync(string email, string password)
+        {
             try
             {
-
-                //Llamar al servicio de Supabase para autenticar
-                var res = await SupabaseService.Instance.SignInAsync(email.Trim(), password);
-                if (!res.Success)
+                var payload = new
                 {
-                    Debug.WriteLine($"AuthService.SignInAsync: supabase error: {res.Error}");
-                    return false;
+                    email = email,
+                    password = password
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var req = new HttpRequestMessage(HttpMethod.Post, $"{_url}/auth/v1/token? grant_type=password")
+                {
+                    Content = content
+                };
+
+                var resp = await _http.SendAsync(req);
+                var json = await resp.Content.ReadAsStringAsync();
+
+                Debug.WriteLine($"SignInAsync: status={resp.StatusCode}; response={json}");
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    return new AuthResponse
+                    {
+                        Success = false,
+                        Error = $"Error de autenticación: {resp.StatusCode}"
+                    };
                 }
 
-                AccessToken = res.AccessToken;  // Guardar AccessToken en memoria
-                UserId = res.UserId?.ToString(); // Guardar UserId como string
-                UserEmail = !string.IsNullOrWhiteSpace(res.Email) ? res.Email : email.Trim(); // Guardar email en memoria
+                var result = JsonSerializer.Deserialize<JsonElement>(json, _jsonOpts);
 
-
-                try
+                return new AuthResponse
                 {
-                    // Guardar en almacenamiento seguro 
-                    if (!string.IsNullOrEmpty(AccessToken))
-                        await SecureStorage.Default.SetAsync(TokenKey, AccessToken);
-
-                    if (!string.IsNullOrEmpty(UserId))
-                        await SecureStorage.Default.SetAsync(UserIdKey, UserId);
-
-                    //Refresh token si está disponible
-                    if (!string.IsNullOrWhiteSpace(res.RefreshToken))
-                        await SecureStorage.Default.SetAsync(RefreshKey, res.RefreshToken);
-
-                    //Informar a supabaservice que use el token recien obtenido
-                    SupabaseService.Instance.SetUserToken(AccessToken);
-
-                }
-                catch (Exception secEx)
-                {
-                    Debug.WriteLine($"AuthServive.SignInAsync: SecureStorage error: {secEx.Message}");
-                }
-
-                return true;
-
+                    Success = true,
+                    AccessToken = result.GetProperty("access_token").GetString(),
+                    RefreshToken = result.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null,
+                    UserId = Guid.Parse(result.GetProperty("user").GetProperty("id").GetString() ?? string.Empty),
+                    Email = result.GetProperty("user").GetProperty("email").GetString()
+                };
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"AuthService.SignInAsync: exception: {ex.Message}");
-                return false;
+                Debug.WriteLine($"SignInAsync error: {ex}");
+                return new AuthResponse
+                {
+                    Success = false,
+                    Error = ex.Message
+                };
             }
-
         }
 
+        #endregion
 
-        public async Task LoadFromStorageAsync()
+        #region Products
+
+        public async Task<List<Product>> GetProductsAsync(int? limit = null, CancellationToken cancellationToken = default)
         {
             try
             {
-                AccessToken = await SecureStorage.Default.GetAsync(TokenKey);
-                UserId = await SecureStorage.Default.GetAsync(UserIdKey);
+                var url = $"{_url}/rest/v1/productos? select=*";
+                if (limit.HasValue && limit.Value > 0)
+                    url += $"&limit={limit.Value}";
 
-                if(!string.IsNullOrWhiteSpace(AccessToken))
-                    SupabaseService.Instance.SetUserToken(AccessToken);
+                Debug.WriteLine($"GetProductsAsync: requesting {url}");
+                using var resp = await _http.GetAsync(url, cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                Debug.WriteLine($"GetProductsAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetProductsAsync failed: {resp.StatusCode} - {json}");
+                    return new List<Product>();
+                }
+
+                var products = JsonSerializer.Deserialize<List<Product>>(json, _jsonOpts) ?? new List<Product>();
+
+                // Validar y filtrar productos inválidos
+                var validProducts = new List<Product>();
+                foreach (var p in products)
+                {
+                    try
+                    {
+                        var errs = p.Validate();
+                        if (errs == null || errs.Count == 0)
+                            validProducts.Add(p);
+                        else
+                            Debug.WriteLine($"SupabaseService: producto inválido (id={p?.Id}): {string.Join("; ", errs)}");
+                    }
+                    catch (Exception vEx)
+                    {
+                        Debug.WriteLine($"SupabaseService: error validando producto:  {vEx}");
+                    }
+                }
+
+                // Normalizar imagenes y fallback
+                NormalizeProductImages(validProducts);
+
+                return validProducts;
             }
-            catch
+            catch (OperationCanceledException)
             {
-                
+                Debug.WriteLine("GetProductsAsync:  cancelled");
+                return new List<Product>();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"SupabaseService.GetProductsAsync error: {ex}");
+                return new List<Product>();
             }
         }
 
-        // Simulación mínima de registro. Reemplaza con SupabaseService.SignUp y manejo real.
-        public async Task<bool> SignUpAsync(string email, string password, string name, string? phone = null)
+        public async Task<Product?> GetProductAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            // TODO: Llamar SupabaseService.Instance.SignUp(...) y tratar respuesta
-            // En esta versión de desarrollo devolvemos true para permitir flujo.
-            // Guarda token/usuario si la API retorna directamente el token.
-            await Task.Delay(300);
-            return true;
-        }
-
-        public void Logout()
-        {
-            AccessToken = null;
-            UserId = null;
-            UserEmail = null;
-
             try
             {
-                SecureStorage.Default.Remove(TokenKey);
-                SecureStorage.Default.Remove(UserIdKey);
-                SecureStorage.Default.Remove(RefreshKey);
-            }
-            catch
-            {
-                //ignorar errores de SecureStorage
-            }
-            // Informar a SupabaseService que no hay token
-            SupabaseService.Instance.SetUserToken(null);
-        }
+                var url = $"{_url}/rest/v1/productos? id=eq.{id}&select=*";
+                using var resp = await _http.GetAsync(url, cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
 
-        public async Task SignOutAsync()
-        {
-            Logout();
-            await Task.CompletedTask;
-        }
+                Debug.WriteLine($"GetProductAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetProductAsync failed: {resp.StatusCode} - {json}");
+                    return null;
+                }
 
-        //Devuelve el access token en  memoria o lo carga del SecureStorage
-        public async Task<string?> GetAccessTokenAsync()
-        {
-            //Si ya lo tenemos en memoria, devolverlo
-            if (!string.IsNullOrWhiteSpace(AccessToken))
-                return AccessToken;
+                var list = JsonSerializer.Deserialize<List<Product>>(json, _jsonOpts);
+                var product = (list != null && list.Count > 0) ? list[0] : null;
+                if (product != null)
+                    product.ImagenPath = string.IsNullOrWhiteSpace(ImageHelper.Normalize(product.ImagenPath)) ? ImageHelper.DefaultPlaceholder : ImageHelper.Normalize(product.ImagenPath);
 
-            //Si no, intentar cargarlo del SecureStorage
-            try
-            {
-                //TokenKey debe ser el mismo que usamos en SignInAsync                
-                var tokenFromStorage = await SecureStorage.Default.GetAsync(TokenKey);
-                return tokenFromStorage;
+                return product;
             }
-            catch
+            catch (Exception ex)
             {
-                // Falla del SecureStorage
+                Debug.WriteLine($"GetProductAsync error: {ex}");
                 return null;
             }
-
         }
+
+        void NormalizeProductImages(IEnumerable<Product>? products)
+        {
+            if (products == null) return;
+
+            foreach (var p in products)
+            {
+                try
+                {
+                    var normalized = ImageHelper.Normalize(p.ImagenPath);
+                    p.ImagenPath = string.IsNullOrWhiteSpace(normalized) ? ImageHelper.DefaultPlaceholder : normalized;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"NormalizeProductImages:  error for {p?.Nombre}: {ex}");
+                    p.ImagenPath = ImageHelper.DefaultPlaceholder;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Orders & Items
+
+        // Crear pedido + items (ya existía, se mantiene con algunas validaciones)
+        public async Task<Order> CreateOrderAsync(Guid userid, List<OrderItem> items, CancellationToken cancellationToken = default)
+        {
+            var total = items.Sum(it => it.Price * it.Quantity);
+
+            var orderPayload = new
+            {
+                userid = userid,
+                total = total,
+                status = "pendiente",
+                created_at = DateTime.UtcNow
+            };
+
+            var orderContent = new StringContent(JsonSerializer.Serialize(orderPayload), Encoding.UTF8, "application/json");
+            using var orderReq = new HttpRequestMessage(HttpMethod.Post, $"{_url}/rest/v1/pedidos") { Content = orderContent };
+            orderReq.Headers.Add("Prefer", "return=representation");
+
+            var resp = await _http.SendAsync(orderReq, cancellationToken);
+            var createdOrderJson = await resp.Content.ReadAsStringAsync(cancellationToken);
+            if (!resp.IsSuccessStatusCode)
+            {
+                Debug.WriteLine($"CreateOrderAsync (order) failed: {resp.StatusCode} - {createdOrderJson}");
+                throw new Exception(createdOrderJson);
+            }
+
+            var created = JsonSerializer.Deserialize<List<Order>>(createdOrderJson, _jsonOpts);
+            if (created == null || created.Count == 0) throw new Exception("No se pudo crear el pedido.");
+            var createdOrder = created[0];
+
+            // Insertar items en batch
+            var itemsPayload = items.Select(it => new
+            {
+                pedido_id = createdOrder.Id,
+                producto_id = it.ProductId,
+                cantidad = it.Quantity,
+                precio = it.Price
+            }).ToList();
+
+            var itemsContent = new StringContent(JsonSerializer.Serialize(itemsPayload), Encoding.UTF8, "application/json");
+            using var itemsReq = new HttpRequestMessage(HttpMethod.Post, $"{_url}/rest/v1/pedido_items") { Content = itemsContent };
+            itemsReq.Headers.Add("Prefer", "return=representation");
+
+            var respItems = await _http.SendAsync(itemsReq, cancellationToken);
+            var respItemsBody = await respItems.Content.ReadAsStringAsync(cancellationToken);
+            if (!respItems.IsSuccessStatusCode)
+            {
+                Debug.WriteLine($"CreateOrderAsync (items) failed: {respItems.StatusCode} - {respItemsBody}");
+                throw new Exception(respItemsBody);
+            }
+
+            return createdOrder;
+        }
+
+        // Obtener órdenes con filtros generales
+        public async Task<List<Order>> GetOrdersAsync(Guid? userId = null, string? status = null, bool includeItems = false, int? limit = null, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var sb = new StringBuilder();
+                sb.Append($"{_url}/rest/v1/pedidos?select=*");
+
+                if (userId.HasValue)
+                    sb.Append($"&userid=eq.{userId.Value}");
+
+                if (!string.IsNullOrWhiteSpace(status))
+                    sb.Append($"&status=eq.{Uri.EscapeDataString(status)}");
+
+                sb.Append("&order=created_at. desc");
+
+                if (limit.HasValue && limit.Value > 0)
+                    sb.Append($"&limit={limit.Value}");
+
+                var url = sb.ToString();
+                Debug.WriteLine($"GetOrdersAsync: requesting {url}");
+
+                using var resp = await _http.GetAsync(url, cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                Debug.WriteLine($"GetOrdersAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetOrdersAsync failed: {resp.StatusCode} - {json}");
+                    return new List<Order>();
+                }
+
+                var orders = JsonSerializer.Deserialize<List<Order>>(json, _jsonOpts) ?? new List<Order>();
+
+                if (includeItems && orders.Count > 0)
+                {
+                    foreach (var o in orders)
+                    {
+                        try
+                        {
+                            o.Items = await GetOrderItemsAsync(o.Id, cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"GetOrdersAsync: error getting items for order {o.Id}: {ex}");
+                        }
+                    }
+                }
+
+                return orders;
+            }
+            catch (OperationCanceledException)
+            {
+                Debug.WriteLine("GetOrdersAsync: cancelled");
+                return new List<Order>();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetOrdersAsync error: {ex}");
+                return new List<Order>();
+            }
+        }
+
+        // Obtener órdenes de un usuario (nombre claro)
+        public async Task<List<Order>> GetOrdersByUserAsync(Guid userId, bool includeItems = false, CancellationToken cancellationToken = default)
+        {
+            return await GetOrdersAsync(userId: userId, includeItems: includeItems, cancellationToken: cancellationToken);
+        }
+
+        // Obtener una orden específica
+        public async Task<Order?> GetOrderAsync(Guid orderId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var resp = await _http.GetAsync($"{_url}/rest/v1/pedidos? idpedido=eq.{orderId}&select=*", cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                Debug.WriteLine($"GetOrderAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetOrderAsync failed: {resp.StatusCode} - {json}");
+                    return null;
+                }
+
+                var list = JsonSerializer.Deserialize<List<Order>>(json, _jsonOpts);
+                var order = (list != null && list.Count > 0) ? list[0] : null;
+
+                if (order != null)
+                {
+                    try
+                    {
+                        order.Items = await GetOrderItemsAsync(order.Id, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"GetOrderAsync: error loading items for order {order.Id}:  {ex}");
+                    }
+                }
+
+                return order;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetOrderAsync error: {ex}");
+                return null;
+            }
+        }
+
+        // Obtener items de una orden específica
+        public async Task<List<OrderItem>> GetOrderItemsAsync(Guid orderId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var resp = await _http.GetAsync($"{_url}/rest/v1/pedido_items?pedido_id=eq.{orderId}&select=*", cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                Debug.WriteLine($"GetOrderItemsAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetOrderItemsAsync failed: {resp.StatusCode} - {json}");
+                    return new List<OrderItem>();
+                }
+
+                var items = JsonSerializer.Deserialize<List<OrderItem>>(json, _jsonOpts) ?? new List<OrderItem>();
+                return items;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetOrderItemsAsync error: {ex}");
+                return new List<OrderItem>();
+            }
+        }
+
+        #endregion
+
+        #region Locations (tracking)
+
+        public async Task<List<OrderLocation>> GetOrderLocationsAsync(Guid orderId, int limit = 100, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var resp = await _http.GetAsync($"{_url}/rest/v1/order_locations?pedido_id=eq.{orderId}&order=registrado_en. desc&limit={limit}", cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                Debug.WriteLine($"GetOrderLocationsAsync: status={resp.StatusCode}; bodyLength={(json?.Length ?? 0)}");
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetOrderLocationsAsync failed: {resp.StatusCode} - {json}");
+                    return new List<OrderLocation>();
+                }
+
+                var locs = JsonSerializer.Deserialize<List<OrderLocation>>(json, _jsonOpts) ?? new List<OrderLocation>();
+                return locs;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetOrderLocationsAsync error: {ex}");
+                return new List<OrderLocation>();
+            }
+        }
+
+        // Insertar registro de ubicación (histórico)
+        public async Task<bool> InsertOrderLocationAsync(OrderLocation loc, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var payload = new[] { new
+                {
+                    pedido_id = loc.PedidoId,
+                    latitud = loc.Latitud,
+                    longitud = loc. Longitud,
+                    registrado_en = loc.RegistradoEn,
+                    dispositivo_id = loc.DispositivoId,
+                    velocidad = loc.Velocidad,
+                    rumb = loc.Rumbo
+                } };
+
+                var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var req = new HttpRequestMessage(HttpMethod.Post, $"{_url}/rest/v1/order_locations") { Content = content };
+                req.Headers.Add("Prefer", "return=representation");
+
+                var resp = await _http.SendAsync(req, cancellationToken);
+                var body = await resp.Content.ReadAsStringAsync(cancellationToken);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"InsertOrderLocationAsync failed: {resp.StatusCode} - {body}");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"InsertOrderLocationAsync error: {ex}");
+                return false;
+            }
+        }
+
+        // Actualizar ubicación actual en la fila pedidos (PATCH)
+        public async Task<bool> UpdateOrderLocationAsync(Guid orderId, double latitude, double longitude, bool enableTracking = true, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var payload = new
+                {
+                    latitud_actual = latitude,
+                    longitud_actual = longitude,
+                    seguimiento_habilitado = enableTracking
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var req = new HttpRequestMessage(HttpMethod.Patch, $"{_url}/rest/v1/pedidos? id=eq.{orderId}") { Content = content };
+                req.Headers.Add("Prefer", "return=representation");
+
+                var resp = await _http.SendAsync(req, cancellationToken);
+                var body = await resp.Content.ReadAsStringAsync(cancellationToken);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"UpdateOrderLocationAsync failed: {resp.StatusCode} - {body}");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"UpdateOrderLocationAsync error: {ex}");
+                return false;
+            }
+        }
+
+        #endregion
+
+        #region Profiles / Auth helpers
+
+        public async Task<Profile?> GetProfileAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var resp = await _http.GetAsync($"{_url}/rest/v1/profiles? id=eq.{id}&select=*", cancellationToken);
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    Debug.WriteLine($"GetProfileAsync failed: {resp.StatusCode} - {json}");
+                    return null;
+                }
+                var list = JsonSerializer.Deserialize<List<Profile>>(json, _jsonOpts);
+                return (list != null && list.Count > 0) ? list[0] : null;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetProfileAsync exception: {ex}");
+                return null;
+            }
+        }
+
+        #endregion
     }
 }
